@@ -182,11 +182,26 @@
     #zone-a { position:relative; flex-shrink:0; overflow:hidden; background:#111; }
     #zone-b { position:relative; flex:1; overflow:hidden; background:#111; }
     #zone-divider {
-      height: 3px; width: 100%; background: rgba(255,255,255,0.12);
+      height: 10px; width: 100%; background: transparent;
       flex-shrink: 0; cursor: row-resize; z-index:50;
+      position: relative; display: flex; align-items: center; justify-content: center;
+    }
+    #zone-divider::after {
+      content: ''; display: block;
+      width: 100%; height: 3px;
+      background: rgba(255,255,255,0.18);
+      transition: background 0.2s, height 0.15s;
+    }
+    #zone-divider:hover::after,
+    #zone-divider.dragging::after { background: var(--accent); height: 4px; }
+    #zone-divider .div-handle {
+      position: absolute; left: 50%; transform: translateX(-50%);
+      background: rgba(255,255,255,0.25); border-radius: 4px;
+      width: 48px; height: 4px; pointer-events: none;
       transition: background 0.2s;
     }
-    #zone-divider:hover { background: rgba(255,255,255,0.35); }
+    #zone-divider:hover .div-handle,
+    #zone-divider.dragging .div-handle { background: var(--accent); }
     body.layout-single #zone-b, body.layout-single #zone-divider { display:none; }
     body.layout-single #zone-a { flex:1; }
 
@@ -236,6 +251,11 @@
     .uz-btn.active { border-color:var(--accent); color:var(--accent); background:#fff8f5; font-weight:600; }
     #uz-b.active { border-color:#3a9ad9; color:#3a9ad9; background:#f0f8ff; }
 
+
+    .zone-badge { font-size:11px; padding:2px 10px; border-radius:20px; font-family:var(--mono); margin-left:8px; vertical-align:middle; }
+    .zone-badge-a { background:#fff3ee; color:var(--accent); }
+    .zone-badge-b { background:#e8f4fd; color:#3a9ad9; }
+
     /* Toast */
     #toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--text); color:#fff; padding:12px 26px; border-radius:var(--r); font-size:14px; z-index:9999; transition:transform 0.3s; pointer-events:none; white-space:nowrap; }
     #toast.show { transform:translateX(-50%) translateY(0); }
@@ -250,7 +270,7 @@
     <div class="zone-progress" id="prog-a"></div>
     <div class="zone-dots" id="dots-a"></div>
   </div>
-  <div id="zone-divider"></div>
+  <div id="zone-divider"><div class="div-handle"></div></div>
   <div id="zone-b">
     <div class="zone-label" id="label-b">ZONE B</div>
     <div class="zone-progress" id="prog-b"></div>
@@ -330,13 +350,13 @@
       </div>
 
       <div id="split-settings" style="display:none">
-        <!-- Ratio slider -->
+        <!-- Ratio display (drag to adjust) -->
         <div class="ratio-row">
-          <label>上方比例</label>
-          <input type="range" id="inp-ratio" min="20" max="80" value="50"
-            oninput="updateRatioDisplay(this.value)">
-          <span id="ratio-display">50 : 50</span>
+          <label>目前比例</label>
+          <span id="ratio-display" style="font-family:var(--mono);font-size:14px;color:var(--accent);font-weight:600">50 : 50</span>
+          <span style="font-size:12px;color:var(--sub)">（直接拖曳畫面中的分隔線調整）</span>
         </div>
+        <input type="hidden" id="inp-ratio" value="50">
 
         <!-- Zone A config -->
         <div class="zone-cfg">
@@ -385,11 +405,20 @@
     </div>
 
     <div class="adm-section">
-      <div class="adm-label">目前媒體清單 · Drive Files</div>
+      <div class="adm-label">媒體清單 · Zone A <span class="zone-badge zone-badge-a">▬ 上方</span></div>
       <div id="drive-list"><p class="empty-list">請先儲存設定後載入</p></div>
-      <div class="btn-row" style="margin-top:16px">
+      <div class="btn-row" style="margin-top:10px">
         <button class="btn-ghost" onclick="refreshFiles()">↺ 重新整理</button>
-        <button class="btn-ghost" onclick="window.open('https://drive.google.com/drive/folders/'+CONFIG.FOLDER_ID,'_blank')">📁 開啟 Drive 資料夾</button>
+        <button class="btn-ghost" onclick="window.open('https://drive.google.com/drive/folders/'+CONFIG.FOLDER_ID,'_blank')">📁 開啟資料夾 A</button>
+      </div>
+    </div>
+
+    <div class="adm-section" id="drive-section-b" style="display:none">
+      <div class="adm-label">媒體清單 · Zone B <span class="zone-badge zone-badge-b">▬ 下方</span></div>
+      <div id="drive-list-b"><p class="empty-list">載入中…</p></div>
+      <div class="btn-row" style="margin-top:10px">
+        <button class="btn-ghost" onclick="refreshFiles()">↺ 重新整理</button>
+        <button class="btn-ghost" id="btn-open-b" onclick="window.open('https://drive.google.com/drive/folders/'+CONFIG.FOLDER_ID_B,'_blank')">📁 開啟資料夾 B</button>
       </div>
     </div>
   </div>
@@ -505,6 +534,9 @@ function applyLayout() {
   CONFIG.SLIDE_DURATION_B = parseInt(db ? db.value : 4) || 4;
   localStorage.setItem('sjps_cfg', JSON.stringify(CONFIG));
   applyStageLayout();
+  // show/hide Zone B drive list section
+  const secB = document.getElementById('drive-section-b');
+  if (secB) secB.style.display = CONFIG.LAYOUT_MODE === 'split' ? 'block' : 'none';
   showToast('✓ 版面已套用');
   refreshFiles();
 }
@@ -516,11 +548,57 @@ function applyStageLayout() {
     body.classList.add('layout-split');
     document.getElementById('zone-a').style.height = CONFIG.LAYOUT_RATIO + '%';
     document.getElementById('zone-a').style.width = '';
+    setupDividerDrag();
   } else {
     body.classList.remove('layout-split');
     body.classList.add('layout-single');
     document.getElementById('zone-a').style.height = '';
     document.getElementById('zone-a').style.width = '';
+  }
+}
+
+function setupDividerDrag() {
+  const divider = document.getElementById('zone-divider');
+  const stage   = document.getElementById('stage');
+  const zoneA   = document.getElementById('zone-a');
+  if (!divider._dragSetup) {
+    divider._dragSetup = true;
+
+    function onMove(clientY) {
+      const rect = stage.getBoundingClientRect();
+      let pct = ((clientY - rect.top) / rect.height) * 100;
+      pct = Math.min(Math.max(pct, 15), 85);
+      CONFIG.LAYOUT_RATIO = Math.round(pct);
+      zoneA.style.height = pct + '%';
+      updateRatioDisplay(CONFIG.LAYOUT_RATIO);
+      // update hidden input
+      const ri = document.getElementById('inp-ratio');
+      if (ri) ri.value = CONFIG.LAYOUT_RATIO;
+    }
+    function stopDrag() {
+      divider.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', stopDrag);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', stopDrag);
+      // save
+      try { localStorage.setItem('sjps_cfg', JSON.stringify(CONFIG)); } catch(e) {}
+    }
+    function onMouseMove(e) { onMove(e.clientY); }
+    function onTouchMove(e) { e.preventDefault(); onMove(e.touches[0].clientY); }
+
+    divider.addEventListener('mousedown', e => {
+      e.preventDefault();
+      divider.classList.add('dragging');
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', stopDrag);
+    });
+    divider.addEventListener('touchstart', e => {
+      e.preventDefault();
+      divider.classList.add('dragging');
+      document.addEventListener('touchmove', onTouchMove, { passive: false });
+      document.addEventListener('touchend', stopDrag);
+    }, { passive: false });
   }
 }
 
@@ -667,6 +745,7 @@ async function fetchZoneB() {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
     allFilesB = data.files || [];
+    updateDriveListB(allFilesB);
     await buildSlideEls('b');
     startSlideshowB();
   } catch(e) {
@@ -846,6 +925,10 @@ function openAdmin() {
   clearTimeout(slideTimer); cancelAnimationFrame(progressRaf);
   document.getElementById('admin-overlay').classList.add('open');
   updateDriveList(allFiles);
+  updateDriveListB(allFilesB);
+  // show Zone B section only in split mode
+  const secB = document.getElementById('drive-section-b');
+  if (secB) secB.style.display = CONFIG.LAYOUT_MODE === 'split' ? 'block' : 'none';
   updateUploadBadge();
 }
 
@@ -981,10 +1064,27 @@ async function deleteFile(fileId, fileName) {
   }
 }
 
-// ── DRIVE LIST (delete + duration + PDF pages) ──
+// ── DRIVE LIST B ──
+function updateDriveListB(files) {
+  const el = document.getElementById('drive-list-b');
+  if (!el) return;
+  if (!files || !files.length) {
+    el.innerHTML = '<p class="empty-list">' + (CONFIG.FOLDER_ID_B ? '資料夾內尚無媒體檔案' : '請先設定 Zone B 資料夾 ID') + '</p>';
+    return;
+  }
+  renderDriveList(el, files, 'b');
+}
+
+// ── DRIVE LIST A ──
 function updateDriveList(files) {
   const el = document.getElementById('drive-list');
-  if (!files.length) { el.innerHTML = '<p class="empty-list">資料夾內尚無媒體檔案</p>'; return; }
+  if (!el) return;
+  if (!files || !files.length) { el.innerHTML = '<p class="empty-list">資料夾內尚無媒體檔案</p>'; return; }
+  renderDriveList(el, files, 'a');
+}
+
+// ── SHARED RENDER ──
+function renderDriveList(el, files, zone) {
   const icon = m => {
     if (m.startsWith('image/')) return '🖼️';
     if (m.includes('pdf')) return '📄';
@@ -993,6 +1093,7 @@ function updateDriveList(files) {
     return '📁';
   };
   el.innerHTML = '';
+  const defDur = zone === 'b' ? (CONFIG.SLIDE_DURATION_B||4) : (CONFIG.SLIDE_DURATION||4);
   files.forEach(f => {
     const isPdf = (f.mimeType || '').includes('pdf');
     const curDur = fileDurations[f.id] !== undefined ? fileDurations[f.id] : '';
@@ -1017,7 +1118,7 @@ function updateDriveList(files) {
         </label>` : ''}
         <label class="dl-ctrl-label">${isPdf ? '每頁秒數' : '播放秒數'}
           <input class="dl-dur-inp" type="number" min="1" max="999"
-            value="${curDur}" placeholder="${CONFIG.SLIDE_DURATION||4}"
+            value="${curDur}" placeholder="${defDur}"
             title="播放秒數（空白=使用預設）"
             onchange="setFileDur('${f.id}', this.value)">
         </label>
