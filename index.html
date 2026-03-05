@@ -31,6 +31,9 @@
     .slide img { display:block; max-width:100%; max-height:100%; object-fit:contain; }
     .slide iframe { position:absolute; inset:0; width:100%; height:100%; border:none; }
 
+    .slide canvas { display:block; max-width:100%; max-height:100%; object-fit:contain; box-shadow:0 4px 32px rgba(0,0,0,0.5); }
+
+
     /* HUD */
     #hud { position:fixed; inset:0; pointer-events:none; z-index:200; }
     #brand { position:absolute; top:16px; left:20px; font-family:var(--mono); font-size:12px; letter-spacing:3px; color:rgba(255,255,255,0.3); text-transform:uppercase; }
@@ -322,7 +325,7 @@ async function fetchAndBuildSlides() {
     hideLoading();
 
     if (!slides.length) { showSetup(); return; }
-    buildSlideEls();
+    await buildSlideEls();
     startSlideshow();
     document.getElementById('setup-screen').classList.remove('show');
 
@@ -352,27 +355,86 @@ async function refreshFiles() {
 }
 
 // ── SLIDES ───────────────────────────────────────
-function buildSlideEls() {
+// ── PDF.js ───────────────────────────────────────
+let pdfjsLib = null;
+async function ensurePdfjs() {
+  if (pdfjsLib) return;
+  await new Promise(res => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = res; document.head.appendChild(s);
+  });
+  pdfjsLib = window['pdfjs-dist/build/pdf'];
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
+async function buildSlideEls() {
   const host = document.getElementById('slideshow');
   host.innerHTML = '';
-  slides.forEach((file) => {
-    const div = document.createElement('div');
-    div.className = 'slide';
+  slides = []; // reset, will rebuild including PDF pages
+
+  // Re-fetch slides from allFiles
+  const mediaFiles = allFiles.filter(f => {
+    const m = f.mimeType || '';
+    return m.startsWith('image/') || m === 'application/pdf' ||
+           m.includes('presentationml') || m.includes('powerpoint') || m.startsWith('video/');
+  });
+
+  for (const file of mediaFiles) {
     const m = file.mimeType || '';
-    if (m.startsWith('image/')) {
+
+    if (m === 'application/pdf') {
+      // Render each PDF page as a separate slide
+      await ensurePdfjs();
+      try {
+        const url = `https://drive.google.com/uc?export=download&id=${file.id}`;
+        const proxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+        const pdfDoc = await pdfjsLib.getDocument({ url: proxy, cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/', cMapPacked: true }).promise;
+        const numPages = pdfDoc.numPages;
+        for (let p = 1; p <= numPages; p++) {
+          const page = await pdfDoc.getPage(p);
+          const vp = page.getViewport({ scale: 1 });
+          const scale = Math.min(window.innerWidth / vp.width, window.innerHeight / vp.height) * 0.95;
+          const viewport = page.getViewport({ scale });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width; canvas.height = viewport.height;
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+          const div = document.createElement('div'); div.className = 'slide';
+          div.appendChild(canvas);
+          host.appendChild(div);
+          slides.push({ id: file.id + '_p' + p, name: file.name + ' (p' + p + ')', mimeType: m });
+        }
+      } catch(e) {
+        // fallback: show as iframe if PDF.js fails
+        console.warn('PDF.js failed, using iframe fallback:', e);
+        const div = document.createElement('div'); div.className = 'slide';
+        const fr = document.createElement('iframe');
+        fr.src = `https://drive.google.com/file/d/${file.id}/preview`;
+        fr.setAttribute('allowfullscreen', ''); fr.setAttribute('allow', 'autoplay');
+        div.appendChild(fr); host.appendChild(div);
+        slides.push(file);
+      }
+    } else if (m.startsWith('image/')) {
+      const div = document.createElement('div'); div.className = 'slide';
       const img = document.createElement('img');
-      img.src = `https://drive.google.com/uc?export=view&id=${file.id}`;
+      // Use Drive thumbnail URL (works for public files, no CORS issues)
+      img.src = `https://lh3.googleusercontent.com/d/${file.id}`;
       img.alt = file.name;
-      div.appendChild(img);
+      // Fallback if lh3 fails
+      img.onerror = () => { img.src = `https://drive.google.com/thumbnail?id=${file.id}&sz=w1920`; };
+      div.appendChild(img); host.appendChild(div);
+      slides.push(file);
     } else {
+      // video / pptx: iframe preview
+      const div = document.createElement('div'); div.className = 'slide';
       const fr = document.createElement('iframe');
       fr.src = `https://drive.google.com/file/d/${file.id}/preview`;
-      fr.setAttribute('allowfullscreen', '');
-      fr.setAttribute('allow', 'autoplay');
-      div.appendChild(fr);
+      fr.setAttribute('allowfullscreen', ''); fr.setAttribute('allow', 'autoplay');
+      div.appendChild(fr); host.appendChild(div);
+      slides.push(file);
     }
-    host.appendChild(div);
-  });
+  }
   buildDots();
 }
 
@@ -570,7 +632,7 @@ async function deleteFile(fileId, fileName) {
     updateDriveList(allFiles);
     // 若目前在播放被刪除的那張，跳到下一張
     if (slides.length === 0) { showSetup(); return; }
-    buildSlideEls();
+    await buildSlideEls();
     goTo(Math.min(currentIdx, slides.length - 1));
   } catch(e) {
     showToast(`✗ 刪除失敗：${e.message}`);
