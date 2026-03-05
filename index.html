@@ -125,6 +125,16 @@
     .delete-auth-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:18px; padding-top:16px; border-top:1px solid var(--border); }
     .mode-badge { font-size:11px; padding:2px 10px; border-radius:20px; font-family:var(--mono); }
 
+
+    /* Drive list new layout */
+    .dl-item-col { flex-direction:column; align-items:stretch; gap:10px; }
+    .dl-row1 { display:flex; align-items:center; gap:10px; }
+    .dl-row1 .dl-name { flex:1; }
+    .dl-row2 { display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding-left:30px; }
+    .dl-ctrl-label { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--sub); font-family:var(--mono); }
+    .dl-ctrl-label input { width:64px; }
+    .pdf-page-badge { font-size:12px; color:var(--ok); background:var(--ok-light); padding:2px 10px; border-radius:20px; font-family:var(--mono); }
+
     /* Per-file duration in drive list */
     .dl-dur-wrap { display:flex; align-items:center; gap:4px; flex-shrink:0; }
     .dl-dur-inp { width:58px; background:var(--surface); border:1.5px solid var(--border); color:var(--text); font-family:var(--mono); font-size:13px; padding:5px 8px; border-radius:6px; text-align:center; outline:none; transition:border-color 0.2s; }
@@ -258,6 +268,7 @@ window.onGapiLoad = function() {
 function loadConfig() {
   try { const s = localStorage.getItem('sjps_cfg'); if (s) CONFIG = { ...CONFIG, ...JSON.parse(s) }; } catch(e) {}
   try { const d = localStorage.getItem('sjps_dur'); if (d) fileDurations = JSON.parse(d); } catch(e) {}
+  try { const p = localStorage.getItem('sjps_pages'); if (p) filePages = JSON.parse(p); } catch(e) {}
   syncInputs();
 }
 function syncInputs() {
@@ -301,7 +312,7 @@ async function fetchAndBuildSlides() {
     hideLoading();
 
     if (!slides.length) { showSetup(); return; }
-    await buildSlideEls();
+    buildSlideEls();
     startSlideshow();
     document.getElementById('setup-screen').classList.remove('show');
 
@@ -331,26 +342,14 @@ async function refreshFiles() {
 }
 
 // ── SLIDES ───────────────────────────────────────
-// ── PDF.js ───────────────────────────────────────
-let pdfjsLib = null;
-async function ensurePdfjs() {
-  if (pdfjsLib) return;
-  await new Promise(res => {
-    const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-    s.onload = res; document.head.appendChild(s);
-  });
-  pdfjsLib = window['pdfjs-dist/build/pdf'];
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-}
+// filePages: { fileId: pageCount } — 使用者設定的 PDF 頁數
+let filePages = {};
 
-async function buildSlideEls() {
+function buildSlideEls() {
   const host = document.getElementById('slideshow');
   host.innerHTML = '';
-  slides = []; // reset, will rebuild including PDF pages
+  slides = [];
 
-  // Re-fetch slides from allFiles
   const mediaFiles = allFiles.filter(f => {
     const m = f.mimeType || '';
     return m.startsWith('image/') || m === 'application/pdf' ||
@@ -361,48 +360,25 @@ async function buildSlideEls() {
     const m = file.mimeType || '';
 
     if (m === 'application/pdf') {
-      // Render each PDF page as a separate slide
-      await ensurePdfjs();
-      try {
-        const url = `https://drive.google.com/uc?export=download&id=${file.id}`;
-        const proxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-        const pdfDoc = await pdfjsLib.getDocument({ url: proxy, cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/', cMapPacked: true }).promise;
-        const numPages = pdfDoc.numPages;
-        for (let p = 1; p <= numPages; p++) {
-          const page = await pdfDoc.getPage(p);
-          const vp = page.getViewport({ scale: 1 });
-          const scale = Math.min(window.innerWidth / vp.width, window.innerHeight / vp.height) * 0.95;
-          const viewport = page.getViewport({ scale });
-          const canvas = document.createElement('canvas');
-          canvas.width = viewport.width; canvas.height = viewport.height;
-          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-          const div = document.createElement('div'); div.className = 'slide';
-          div.appendChild(canvas);
-          host.appendChild(div);
-          slides.push({ id: file.id + '_p' + p, name: file.name + ' (p' + p + ')', mimeType: m, durationKey: file.id, isPage: true });
-        }
-      } catch(e) {
-        // fallback: show as iframe if PDF.js fails
-        console.warn('PDF.js failed, using iframe fallback:', e);
+      // 用 Google Docs Viewer pg 參數逐頁顯示 — 不需要 CORS，最可靠
+      const pages = filePages[file.id] || 1;
+      for (let p = 1; p <= pages; p++) {
         const div = document.createElement('div'); div.className = 'slide';
         const fr = document.createElement('iframe');
-        fr.src = `https://drive.google.com/file/d/${file.id}/preview`;
-        fr.setAttribute('allowfullscreen', ''); fr.setAttribute('allow', 'autoplay');
+        fr.src = `https://docs.google.com/viewer?srcid=${file.id}&pg=${p}&embedded=true`;
+        fr.setAttribute('allowfullscreen', '');
         div.appendChild(fr); host.appendChild(div);
-        slides.push(file);
+        slides.push({ id: file.id + '_p' + p, name: file.name + ' p' + p, mimeType: m, durationKey: file.id, isPage: true });
       }
     } else if (m.startsWith('image/')) {
       const div = document.createElement('div'); div.className = 'slide';
       const img = document.createElement('img');
-      // Use Drive thumbnail URL (works for public files, no CORS issues)
       img.src = `https://lh3.googleusercontent.com/d/${file.id}`;
       img.alt = file.name;
-      // Fallback if lh3 fails
       img.onerror = () => { img.src = `https://drive.google.com/thumbnail?id=${file.id}&sz=w1920`; };
       div.appendChild(img); host.appendChild(div);
       slides.push(file);
     } else {
-      // video / pptx: iframe preview
       const div = document.createElement('div'); div.className = 'slide';
       const fr = document.createElement('iframe');
       fr.src = `https://drive.google.com/file/d/${file.id}/preview`;
@@ -614,7 +590,7 @@ async function deleteFile(fileId, fileName) {
     updateDriveList(allFiles);
     // 若目前在播放被刪除的那張，跳到下一張
     if (slides.length === 0) { showSetup(); return; }
-    await buildSlideEls();
+    buildSlideEls();
     goTo(Math.min(currentIdx, slides.length - 1));
   } catch(e) {
     showToast(`✗ 刪除失敗：${e.message}`);
@@ -622,7 +598,7 @@ async function deleteFile(fileId, fileName) {
   }
 }
 
-// ── DRIVE LIST (with delete + per-file duration) ──
+// ── DRIVE LIST (delete + duration + PDF pages) ──
 function updateDriveList(files) {
   const el = document.getElementById('drive-list');
   if (!files.length) { el.innerHTML = '<p class="empty-list">資料夾內尚無媒體檔案</p>'; return; }
@@ -637,34 +613,53 @@ function updateDriveList(files) {
   files.forEach(f => {
     const isPdf = (f.mimeType || '').includes('pdf');
     const curDur = fileDurations[f.id] !== undefined ? fileDurations[f.id] : '';
-    const div = document.createElement('div'); div.className = 'dl-item';
+    const curPages = filePages[f.id] !== undefined ? filePages[f.id] : '';
+    const div = document.createElement('div'); div.className = 'dl-item dl-item-col';
     div.innerHTML = `
-      <span class="dl-icon">${icon(f.mimeType || '')}</span>
-      <span class="dl-name">${f.name}${isPdf ? ' <em class="pdf-note">每頁共用此秒數</em>' : ''}</span>
-      <span class="dl-dur-wrap">
-        <input class="dl-dur-inp" type="number" min="1" max="999"
-          value="${curDur}" placeholder="${CONFIG.SLIDE_DURATION||4}"
-          title="此檔播放秒數（空白=使用預設）"
-          onchange="setFileDur('${f.id}', this.value)">
-        <span class="dl-dur-label">秒</span>
-      </span>
-      ${accessToken
-        ? `<button class="btn-delete" onclick="deleteFile('${f.id}','${f.name.replace(/'/g,"\\'")}')">🗑</button>`
-        : '<span class="dl-login-hint">登入可刪</span>'
-      }`;
+      <div class="dl-row1">
+        <span class="dl-icon">${icon(f.mimeType || '')}</span>
+        <span class="dl-name">${f.name}</span>
+        ${accessToken
+          ? `<button class="btn-delete" onclick="deleteFile('${f.id}','${f.name.replace(/'/g,"\\'")}')">🗑</button>`
+          : '<span class="dl-login-hint">登入可刪</span>'
+        }
+      </div>
+      <div class="dl-row2">
+        ${isPdf ? `
+        <label class="dl-ctrl-label">PDF 總頁數
+          <input class="dl-dur-inp" type="number" min="1" max="999"
+            value="${curPages}" placeholder="？"
+            title="PDF 有幾頁？填入後每頁會獨立播放"
+            onchange="setPdfPages('${f.id}', this.value)">
+        </label>` : ''}
+        <label class="dl-ctrl-label">${isPdf ? '每頁秒數' : '播放秒數'}
+          <input class="dl-dur-inp" type="number" min="1" max="999"
+            value="${curDur}" placeholder="${CONFIG.SLIDE_DURATION||4}"
+            title="播放秒數（空白=使用預設）"
+            onchange="setFileDur('${f.id}', this.value)">
+        </label>
+        ${isPdf && curPages ? `<span class="pdf-page-badge">共 ${curPages} 頁</span>` : ''}
+      </div>`;
     el.appendChild(div);
   });
 }
 
 function setFileDur(fileId, val) {
   const n = parseInt(val);
-  if (!isNaN(n) && n > 0) {
-    fileDurations[fileId] = n;
-  } else {
-    delete fileDurations[fileId];
-  }
-  // save to localStorage
+  if (!isNaN(n) && n > 0) fileDurations[fileId] = n;
+  else delete fileDurations[fileId];
   try { localStorage.setItem('sjps_dur', JSON.stringify(fileDurations)); } catch(e){}
+}
+
+function setPdfPages(fileId, val) {
+  const n = parseInt(val);
+  if (!isNaN(n) && n > 0) filePages[fileId] = n;
+  else delete filePages[fileId];
+  try { localStorage.setItem('sjps_pages', JSON.stringify(filePages)); } catch(e){}
+  // 重建投影片
+  buildSlideEls();
+  goTo(0);
+  showToast('✓ 已更新頁數，重新建立投影片');
 }
 
 // ── HELPERS ──────────────────────────────────────
