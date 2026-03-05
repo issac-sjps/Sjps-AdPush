@@ -176,6 +176,57 @@
     #exit-fs-btn:hover { background: rgba(0,0,0,0.7); }
     :fullscreen #exit-fs-btn, :-webkit-full-screen #exit-fs-btn { display: flex; }
 
+
+    /* ── SPLIT LAYOUT ── */
+    #stage { position:fixed; inset:0; display:flex; background:#000; }
+    #zone-a { position:relative; flex-shrink:0; overflow:hidden; background:#111; }
+    #zone-b { position:relative; flex:1; overflow:hidden; background:#111; }
+    #zone-divider {
+      width: 3px; background: rgba(255,255,255,0.12);
+      flex-shrink: 0; cursor: col-resize; z-index:50;
+      transition: background 0.2s;
+    }
+    #zone-divider:hover { background: rgba(255,255,255,0.35); }
+    body.layout-single #zone-b, body.layout-single #zone-divider { display:none; }
+    body.layout-single #zone-a { flex:1; }
+
+    /* slides inside zones */
+    .zone-slide { position:absolute; inset:0; opacity:0; transition:opacity 0.8s ease; display:flex; align-items:center; justify-content:center; background:#111; }
+    .zone-slide.active { opacity:1; }
+    .zone-slide img { display:block; max-width:100%; max-height:100%; object-fit:contain; }
+    .zone-slide iframe { position:absolute; inset:0; width:100%; height:100%; border:none; }
+    .zone-slide canvas { display:block; max-width:100%; max-height:100%; object-fit:contain; }
+
+    /* zone labels */
+    .zone-label {
+      position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
+      font-family:var(--mono); font-size:10px; letter-spacing:2px;
+      color:rgba(255,255,255,0.2); z-index:10; pointer-events:none;
+      white-space:nowrap;
+    }
+    /* progress bars per zone */
+    .zone-progress { position:absolute; bottom:0; left:0; height:3px; background:var(--accent); width:0%; z-index:20; }
+    #prog-b { background: #3a9ad9; box-shadow:0 0 10px rgba(58,154,217,0.6); }
+
+    /* dots per zone */
+    .zone-dots { position:absolute; bottom:16px; left:50%; transform:translateX(-50%); display:flex; gap:6px; z-index:20; pointer-events:none; }
+
+    /* layout preview widget */
+    .layout-preview { display:flex; gap:10px; margin:14px 0; }
+    .lp-opt { flex:1; border:2px solid var(--border); border-radius:var(--r); padding:12px; cursor:pointer; text-align:center; transition:border-color 0.2s; }
+    .lp-opt.active { border-color:var(--accent); background:#fff8f5; }
+    .lp-opt .lp-icon { font-size:22px; margin-bottom:6px; }
+    .lp-opt .lp-name { font-size:13px; font-weight:600; }
+    .lp-opt .lp-sub { font-size:11px; color:var(--sub); }
+
+    .ratio-row { display:flex; align-items:center; gap:12px; margin:14px 0; }
+    .ratio-row label { font-size:13px; color:var(--sub); font-family:var(--mono); min-width:70px; }
+    #inp-ratio { flex:1; accent-color:var(--accent); }
+    #ratio-display { font-family:var(--mono); font-size:13px; color:var(--accent); min-width:60px; text-align:center; }
+
+    .zone-cfg { border:1.5px solid var(--border); border-radius:var(--r); padding:16px 18px; margin-top:12px; }
+    .zone-cfg-title { font-family:var(--mono); font-size:11px; letter-spacing:3px; color:var(--sub); text-transform:uppercase; margin-bottom:12px; }
+
     /* Toast */
     #toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--text); color:#fff; padding:12px 26px; border-radius:var(--r); font-size:14px; z-index:9999; transition:transform 0.3s; pointer-events:none; white-space:nowrap; }
     #toast.show { transform:translateX(-50%) translateY(0); }
@@ -184,13 +235,23 @@
 <body>
 
 <div id="loading"><div class="spinner"></div><p>載入媒體中…</p></div>
-<div id="slideshow"></div>
+<div id="stage">
+  <div id="zone-a">
+    <div class="zone-label" id="label-a">ZONE A</div>
+    <div class="zone-progress" id="prog-a"></div>
+    <div class="zone-dots" id="dots-a"></div>
+  </div>
+  <div id="zone-divider"></div>
+  <div id="zone-b">
+    <div class="zone-label" id="label-b">ZONE B</div>
+    <div class="zone-progress" id="prog-b"></div>
+    <div class="zone-dots" id="dots-b"></div>
+  </div>
+</div>
 
 <div id="hud">
   <div id="brand">SJPS · AdPush</div>
   <div id="counter"></div>
-  <div id="progress"></div>
-  <div id="dots"></div>
 
   <!-- 右上角：設定 + 全螢幕 -->
   <div id="corner-btns">
@@ -243,6 +304,56 @@
       <input type="hidden" id="inp-scripturl">
     </div>
 
+    <!-- ── LAYOUT SECTION ── -->
+    <div class="adm-section">
+      <div class="adm-label">版面配置 · Layout</div>
+      <div class="layout-preview">
+        <div class="lp-opt" id="lo-single" onclick="setLayoutMode('single')">
+          <div class="lp-icon">▭</div>
+          <div class="lp-name">單版面</div>
+          <div class="lp-sub">一個區域輪播</div>
+        </div>
+        <div class="lp-opt" id="lo-split" onclick="setLayoutMode('split')">
+          <div class="lp-icon">▬</div>
+          <div class="lp-name">雙版面</div>
+          <div class="lp-sub">左右各自輪播</div>
+        </div>
+      </div>
+
+      <div id="split-settings" style="display:none">
+        <!-- Ratio slider -->
+        <div class="ratio-row">
+          <label>左側比例</label>
+          <input type="range" id="inp-ratio" min="20" max="80" value="50"
+            oninput="updateRatioDisplay(this.value)">
+          <span id="ratio-display">50 : 50</span>
+        </div>
+
+        <!-- Zone A config -->
+        <div class="zone-cfg">
+          <div class="zone-cfg-title">▐ 左側 Zone A</div>
+          <p style="font-size:13px;color:var(--sub)">使用主要 Drive 資料夾（上方設定）</p>
+        </div>
+
+        <!-- Zone B config -->
+        <div class="zone-cfg" style="margin-top:10px;border-color:#3a9ad9">
+          <div class="zone-cfg-title" style="color:#3a9ad9">▐ 右側 Zone B</div>
+          <div class="cfg-row" style="margin-top:8px">
+            <span class="cfg-key">資料夾 ID B</span>
+            <input class="cfg-val" id="inp-folderid-b" type="text" placeholder="右側 Drive 資料夾 ID">
+          </div>
+          <div class="cfg-row">
+            <span class="cfg-key">預設秒數 B</span>
+            <input class="cfg-val" id="inp-duration-b" type="number" placeholder="4" min="1" max="300">
+          </div>
+        </div>
+
+        <div class="btn-row" style="margin-top:14px">
+          <button class="btn-primary" onclick="applyLayout()">✓ 套用版面</button>
+        </div>
+      </div>
+    </div>
+
     <div class="adm-section">
       <div class="adm-label">上傳媒體 · Upload &nbsp;<span id="upload-mode-badge" class="mode-badge"></span></div>
       <div id="drop-zone" onclick="document.getElementById('file-input').click()">
@@ -275,25 +386,31 @@
 <script>
 let CONFIG = {
   FOLDER_ID:      '18_RG5qrn-8WVxyq6QwyNIW3afIMtKZGi',
+  FOLDER_ID_B:    '1HgYpnYUUozBY-k5_vBmE4wat3-qHNL5p',  // 右側 Zone B 的資料夾
   API_KEY:        'AIzaSyDiKpm2ZZU7I2JO2XR6SPAWALvFgf0ifWU',
   CLIENT_ID:      '488969442881-g1vrrsg5h6dbl3dirk23mm4iofsm5c36.apps.googleusercontent.com',
-  SLIDE_DURATION: 4,
-  // drive 權限：可上傳 + 刪除任何資料夾內的檔案
+  SLIDE_DURATION:   4,
+  SLIDE_DURATION_B: 4,          // Zone B 預設秒數
+  LAYOUT_MODE:    'single',     // 'single' | 'split'
+  LAYOUT_RATIO:   50,           // 左側百分比
   SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxevpeDdQiKd72V_ELCe_rPhjqkzCsp0hEX2Zrf8zOgzfGpnbuvdo7w2TkiDghmN5aIwA/exec',
   SCOPES: 'https://www.googleapis.com/auth/drive'
 };
 
-let allFiles = [];   // 所有檔案（含非媒體）
+let allFiles = [];   // Zone A 檔案
+let allFilesB = []; // Zone B 檔案
 let slides = [], currentIdx = 0;
+let slidesB = [], currentIdxB = 0;
 let slideTimer = null, progressRaf = null, progressStart = null;
+let slideTimerB = null, progressRafB = null, progressStartB = null;
 let adminOpen = false, tokenClient = null, accessToken = null, gapiReady = false;
-// 每個檔案的自訂秒數，key = fileId（或 pdfId_pN），value = 秒數
 let fileDurations = {};
 
 // ── BOOT ──────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
-  loadConfig(); setupKeyboard(); setupDropZone();
-  document.getElementById('admin-trigger').addEventListener('click', openAdmin);
+  loadConfig();
+  applyStageLayout();
+  setupKeyboard(); setupDropZone();
   document.getElementById('btn-close').addEventListener('click', closeAdmin);
 });
 
@@ -321,6 +438,12 @@ function syncInputs() {
   document.getElementById('inp-folderid').value = CONFIG.FOLDER_ID || '';
   document.getElementById('inp-duration').value = CONFIG.SLIDE_DURATION || 4;
   const su = document.getElementById('inp-scripturl'); if(su) su.value = CONFIG.SCRIPT_URL||'';
+  // Layout
+  const fb = document.getElementById('inp-folderid-b'); if(fb) fb.value = CONFIG.FOLDER_ID_B||'';
+  const db = document.getElementById('inp-duration-b'); if(db) db.value = CONFIG.SLIDE_DURATION_B||4;
+  const ri = document.getElementById('inp-ratio'); if(ri) ri.value = CONFIG.LAYOUT_RATIO||50;
+  updateRatioDisplay(CONFIG.LAYOUT_RATIO||50);
+  setLayoutMode(CONFIG.LAYOUT_MODE||'single', false);
 }
 function saveConfig() {
   CONFIG.API_KEY        = document.getElementById('inp-apikey').value.trim();
@@ -331,6 +454,47 @@ function saveConfig() {
   localStorage.setItem('sjps_cfg', JSON.stringify(CONFIG));
   showToast('✓ 設定已儲存');
   refreshFiles();
+}
+
+function updateRatioDisplay(val) {
+  val = parseInt(val) || 50;
+  const disp = document.getElementById('ratio-display');
+  if (disp) disp.textContent = val + ' : ' + (100 - val);
+}
+
+function setLayoutMode(mode, save=true) {
+  CONFIG.LAYOUT_MODE = mode;
+  document.getElementById('lo-single').classList.toggle('active', mode==='single');
+  document.getElementById('lo-split').classList.toggle('active', mode==='split');
+  const ss = document.getElementById('split-settings');
+  if (ss) ss.style.display = mode==='split' ? 'block' : 'none';
+  if (save) localStorage.setItem('sjps_cfg', JSON.stringify(CONFIG));
+}
+
+function applyLayout() {
+  const ri = document.getElementById('inp-ratio');
+  const fb = document.getElementById('inp-folderid-b');
+  const db = document.getElementById('inp-duration-b');
+  CONFIG.LAYOUT_RATIO    = parseInt(ri ? ri.value : 50) || 50;
+  CONFIG.FOLDER_ID_B     = fb ? fb.value.trim() : '';
+  CONFIG.SLIDE_DURATION_B = parseInt(db ? db.value : 4) || 4;
+  localStorage.setItem('sjps_cfg', JSON.stringify(CONFIG));
+  applyStageLayout();
+  showToast('✓ 版面已套用');
+  refreshFiles();
+}
+
+function applyStageLayout() {
+  const body = document.body;
+  if (CONFIG.LAYOUT_MODE === 'split') {
+    body.classList.remove('layout-single');
+    body.classList.add('layout-split');
+    document.getElementById('zone-a').style.width = CONFIG.LAYOUT_RATIO + '%';
+  } else {
+    body.classList.remove('layout-split');
+    body.classList.add('layout-single');
+    document.getElementById('zone-a').style.width = '';
+  }
 }
 
 // ── FETCH ────────────────────────────────────────
@@ -356,24 +520,34 @@ async function fetchAndBuildSlides() {
     hideLoading();
 
     if (!slides.length) { showSetup(); return; }
-    await buildSlideEls();
+
+    // Apply layout
+    applyStageLayout();
+    await buildSlideEls('a');
+
+    // Zone B
+    if (CONFIG.LAYOUT_MODE === 'split' && CONFIG.FOLDER_ID_B) {
+      await fetchZoneB();
+    }
+
     startSlideshow();
     document.getElementById('setup-screen').classList.remove('show');
 
   } catch(e) {
     console.error(e); hideLoading(); showSetup();
-    document.getElementById('drive-list').innerHTML =
-      `<p class="empty-list" style="color:var(--err)">⚠ 無法讀取：${e.message}<br>
-       請確認 API 金鑰正確，且資料夾已設為「公開」<br>
-       ⚠ API 金鑰需在 Google Cloud 允許 <code>https://issac-sjps.github.io/*</code></p>`;
+    document.getElementById('drive-list').innerHTML = `<p class="empty-list" style="color:var(--err)">⚠ 無法讀取：${e.message}<br>請確認 API 金鑰正確，資料夾設為公開，且 API 金鑰允許 https://issac-sjps.github.io/*</p>`;
   }
 }
 
 async function refreshFiles() {
   clearTimeout(slideTimer); cancelAnimationFrame(progressRaf);
-  document.getElementById('slideshow').innerHTML = '';
-  document.getElementById('dots').innerHTML = '';
+  clearTimeout(slideTimerB); cancelAnimationFrame(progressRafB);
+  document.getElementById('zone-a').querySelectorAll('.zone-slide').forEach(e=>e.remove());
+  document.getElementById('zone-b').querySelectorAll('.zone-slide').forEach(e=>e.remove());
+  document.getElementById('dots-a').innerHTML = '';
+  document.getElementById('dots-b').innerHTML = '';
   slides = []; currentIdx = 0; allFiles = [];
+  slidesB = []; currentIdxB = 0; allFilesB = [];
   const l = document.getElementById('loading');
   l.style.display = 'flex'; l.classList.remove('hide');
   if (CONFIG.API_KEY && !gapiReady) {
@@ -421,120 +595,165 @@ async function fetchPdfViaScript(fileId) {
   return arr;
 }
 
-async function renderPdfSlides(file, host) {
+async function renderPdfSlides(file, host, slideList, zone='a') {
   await ensurePdfjs();
   const data = await fetchPdfViaScript(file.id);
   const pdfDoc = await pdfjsLib.getDocument({ data }).promise;
   const numPages = pdfDoc.numPages;
 
-  // Auto-save detected page count
   if (!filePages[file.id] || filePages[file.id] < numPages) {
     filePages[file.id] = numPages;
     try { localStorage.setItem('sjps_pages', JSON.stringify(filePages)); } catch(e) {}
-    // Update input if visible
     const inp = document.querySelector(`input[data-pages-id="${file.id}"]`);
     if (inp) inp.value = numPages;
   }
 
+  const zoneEl = document.getElementById('zone-' + zone);
+  const zoneW = zoneEl.offsetWidth || window.innerWidth * (CONFIG.LAYOUT_RATIO||50)/100;
+  const zoneH = zoneEl.offsetHeight || window.innerHeight;
+
   for (let p = 1; p <= numPages; p++) {
     const page = await pdfDoc.getPage(p);
     const vp = page.getViewport({ scale: 1 });
-    const scale = Math.min(window.screen.width / vp.width, window.screen.height / vp.height) * 0.98;
+    const scale = Math.min(zoneW / vp.width, zoneH / vp.height) * 0.96;
     const viewport = page.getViewport({ scale });
     const canvas = document.createElement('canvas');
     canvas.width = viewport.width; canvas.height = viewport.height;
     await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-    const div = document.createElement('div'); div.className = 'slide';
+    const div = document.createElement('div'); div.className = 'zone-slide';
     div.appendChild(canvas); host.appendChild(div);
-    slides.push({ id: file.id + '_p' + p, name: file.name + ' p' + p,
-                  mimeType: file.mimeType, durationKey: file.id, isPage: true });
+    slideList.push({ id: file.id + '_p' + p, name: file.name + ' p' + p,
+                     mimeType: file.mimeType, durationKey: file.id, isPage: true });
   }
 }
 
-async function buildSlideEls() {
-  const host = document.getElementById('slideshow');
-  host.innerHTML = ''; slides = [];
+async async function fetchZoneB() {
+  if (!CONFIG.FOLDER_ID_B) return;
+  try {
+    const r = await fetch(
+      `https://www.googleapis.com/drive/v3/files` +
+      `?q=%27${CONFIG.FOLDER_ID_B}%27+in+parents+and+trashed%3Dfalse` +
+      `&fields=files(id,name,mimeType)&orderBy=name&pageSize=100&key=${CONFIG.API_KEY}`
+    );
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    allFilesB = data.files || [];
+    await buildSlideEls('b');
+    startSlideshowB();
+  } catch(e) {
+    console.error('Zone B fetch error:', e);
+    showToast('⚠ Zone B 無法載入：' + e.message);
+  }
+}
 
-  const mediaFiles = allFiles.filter(f => {
+function buildSlideEls(zone='a') {
+  const zoneEl = document.getElementById('zone-' + zone);
+  // remove old slides
+  zoneEl.querySelectorAll('.zone-slide').forEach(e => e.remove());
+
+  const srcFiles = zone === 'a' ? allFiles : allFilesB;
+  const mediaFiles = srcFiles.filter(f => {
     const m = f.mimeType || '';
     return m.startsWith('image/') || m === 'application/pdf' ||
            m.includes('presentationml') || m.includes('powerpoint') || m.startsWith('video/');
   });
+
+  const slideList = zone === 'a' ? slides : slidesB;
+  // clear the target array in-place
+  slideList.length = 0;
 
   for (const file of mediaFiles) {
     const m = file.mimeType || '';
 
     if (m === 'application/pdf') {
       try {
-        await renderPdfSlides(file, host);
+        await renderPdfSlides(file, zoneEl, slideList, zone);
       } catch(e) {
         console.warn('PDF render failed:', e);
-        // fallback: single iframe slide
-        const div = document.createElement('div'); div.className = 'slide';
+        const div = document.createElement('div'); div.className = 'zone-slide';
         const fr = document.createElement('iframe');
         fr.src = `https://drive.google.com/file/d/${file.id}/preview`;
         fr.setAttribute('allowfullscreen', ''); fr.setAttribute('allow', 'autoplay');
-        div.appendChild(fr); host.appendChild(div);
-        slides.push({ ...file, _fallback: true });
-        showToast(`⚠ ${file.name} 無法拆頁，請確認 Script 已更新`);
+        div.appendChild(fr); zoneEl.appendChild(div);
+        slideList.push({ ...file, _fallback: true });
+        showToast(`⚠ ${file.name} 無法拆頁`);
       }
     } else if (m.startsWith('image/')) {
-      const div = document.createElement('div'); div.className = 'slide';
+      const div = document.createElement('div'); div.className = 'zone-slide';
       const img = document.createElement('img');
       img.src = `https://lh3.googleusercontent.com/d/${file.id}`;
       img.alt = file.name;
       img.onerror = () => { img.src = `https://drive.google.com/thumbnail?id=${file.id}&sz=w1920`; };
-      div.appendChild(img); host.appendChild(div);
-      slides.push(file);
+      div.appendChild(img); zoneEl.appendChild(div);
+      slideList.push(file);
     } else {
-      const div = document.createElement('div'); div.className = 'slide';
+      const div = document.createElement('div'); div.className = 'zone-slide';
       const fr = document.createElement('iframe');
       fr.src = `https://drive.google.com/file/d/${file.id}/preview`;
       fr.setAttribute('allowfullscreen', ''); fr.setAttribute('allow', 'autoplay');
-      div.appendChild(fr); host.appendChild(div);
-      slides.push(file);
+      div.appendChild(fr); zoneEl.appendChild(div);
+      slideList.push(file);
     }
   }
-  buildDots();
+  buildZoneDots(zone, slideList.length);
 }
 
-function buildDots() {
-  const el = document.getElementById('dots');
+function buildZoneDots(zone, count) {
+  const el = document.getElementById('dots-' + zone);
   el.innerHTML = '';
-  if (slides.length <= 1) return;
-  for (let i = 0; i < Math.min(slides.length, 30); i++) {
+  if (count <= 1) return;
+  for (let i = 0; i < Math.min(count, 20); i++) {
     const d = document.createElement('div'); d.className = 'dot'; el.appendChild(d);
   }
 }
 
+// buildDots replaced by buildZoneDots
+
 // ── PLAYBACK ─────────────────────────────────────
 function startSlideshow() { goTo(0); }
+function startSlideshowB() { goToB(0); }
 
 function goTo(idx) {
   if (!slides.length) return;
   idx = ((idx % slides.length) + slides.length) % slides.length;
   currentIdx = idx;
-  document.querySelectorAll('.slide').forEach((s, i) => s.classList.toggle('active', i === idx));
-  document.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i === idx));
+  document.querySelectorAll('#zone-a .zone-slide').forEach((s, i) => s.classList.toggle('active', i === idx));
+  document.querySelectorAll('#dots-a .dot').forEach((d, i) => d.classList.toggle('active', i === idx));
   const n = slides.length;
   document.getElementById('counter').textContent = n > 1
     ? `${String(idx + 1).padStart(2, '0')} / ${String(n).padStart(2, '0')}` : '';
   scheduleNext();
 }
 
+function goToB(idx) {
+  if (!slidesB.length) return;
+  idx = ((idx % slidesB.length) + slidesB.length) % slidesB.length;
+  currentIdxB = idx;
+  document.querySelectorAll('#zone-b .zone-slide').forEach((s, i) => s.classList.toggle('active', i === idx));
+  document.querySelectorAll('#dots-b .dot').forEach((d, i) => d.classList.toggle('active', i === idx));
+  scheduleNextB();
+}
+
 function getCurrentDur() {
   const slide = slides[currentIdx];
   if (!slide) return (CONFIG.SLIDE_DURATION || 4) * 1000;
-  // check per-file or per-page duration
   const key = slide.durationKey || slide.id;
   const custom = fileDurations[key];
   return ((custom !== undefined ? custom : CONFIG.SLIDE_DURATION) || 4) * 1000;
 }
 
+function getCurrentDurB() {
+  const slide = slidesB[currentIdxB];
+  if (!slide) return (CONFIG.SLIDE_DURATION_B || 4) * 1000;
+  const key = slide.durationKey || slide.id;
+  const custom = fileDurations[key];
+  return ((custom !== undefined ? custom : CONFIG.SLIDE_DURATION_B) || 4) * 1000;
+}
+
 function scheduleNext() {
   clearTimeout(slideTimer); cancelAnimationFrame(progressRaf);
   const dur = getCurrentDur();
-  const bar = document.getElementById('progress');
+  const bar = document.getElementById('prog-a');
   bar.style.transition = 'none'; bar.style.width = '0%';
   progressStart = performance.now();
   function tick(now) {
@@ -543,13 +762,28 @@ function scheduleNext() {
     if (pct < 100) progressRaf = requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
-  if (slides.length > 1) {
-    slideTimer = setTimeout(() => goTo(currentIdx + 1), dur);
-  }
+  if (slides.length > 1) slideTimer = setTimeout(() => goTo(currentIdx + 1), dur);
 }
 
-function next() { goTo(currentIdx + 1); }
-function prev() { goTo(currentIdx - 1); }
+function scheduleNextB() {
+  clearTimeout(slideTimerB); cancelAnimationFrame(progressRafB);
+  const dur = getCurrentDurB();
+  const bar = document.getElementById('prog-b');
+  bar.style.transition = 'none'; bar.style.width = '0%';
+  progressStartB = performance.now();
+  function tick(now) {
+    const pct = Math.min((now - progressStartB) / dur * 100, 100);
+    bar.style.width = pct + '%';
+    if (pct < 100) progressRafB = requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+  if (slidesB.length > 1) slideTimerB = setTimeout(() => goToB(currentIdxB + 1), dur);
+}
+
+function next()  { goTo(currentIdx + 1); }
+function prev()  { goTo(currentIdx - 1); }
+function nextB() { goToB(currentIdxB + 1); }
+function prevB() { goToB(currentIdxB - 1); }
 
 // ── KEYBOARD ─────────────────────────────────────
 function setupKeyboard() {
@@ -601,6 +835,7 @@ function closeAdmin() {
   adminOpen = false;
   document.getElementById('admin-overlay').classList.remove('open');
   if (slides.length > 0) scheduleNext();
+  if (slidesB.length > 0) scheduleNextB();
 }
 
 // ── AUTH ─────────────────────────────────────────
