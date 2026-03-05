@@ -235,7 +235,7 @@ let CONFIG = {
   CLIENT_ID:      '488969442881-g1vrrsg5h6dbl3dirk23mm4iofsm5c36.apps.googleusercontent.com',
   SLIDE_DURATION: 4,
   // drive 權限：可上傳 + 刪除任何資料夾內的檔案
-  SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzt0-melj0RspXO8zfSjHNw3ybwpWixtyKcvx6RItQ--hBN4NAl-LcLOKcCjZx319Dz3A/exec',
+  SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxevpeDdQiKd72V_ELCe_rPhjqkzCsp0hEX2Zrf8zOgzfGpnbuvdo7w2TkiDghmN5aIwA/exec',
   SCOPES: 'https://www.googleapis.com/auth/drive'
 };
 
@@ -312,7 +312,7 @@ async function fetchAndBuildSlides() {
     hideLoading();
 
     if (!slides.length) { showSetup(); return; }
-    buildSlideEls();
+    await buildSlideEls();
     startSlideshow();
     document.getElementById('setup-screen').classList.remove('show');
 
@@ -342,13 +342,74 @@ async function refreshFiles() {
 }
 
 // ── SLIDES ───────────────────────────────────────
-// filePages: { fileId: pageCount } — 使用者設定的 PDF 頁數
+// filePages: { fileId: pageCount }
 let filePages = {};
+// pdfCache: { fileId: Uint8Array } — rendered PDF data
+let pdfCache = {};
+let pdfjsLib = null;
 
-function buildSlideEls() {
+async function ensurePdfjs() {
+  if (pdfjsLib) return;
+  await new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+  pdfjsLib = window['pdfjs-dist/build/pdf'];
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
+// Fetch PDF via Apps Script (bypasses CORS completely)
+async function fetchPdfViaScript(fileId) {
+  if (pdfCache[fileId]) return pdfCache[fileId];
+  if (!CONFIG.SCRIPT_URL) throw new Error('未設定 Script 網址');
+  const r = await fetch(`${CONFIG.SCRIPT_URL}?id=${fileId}`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const json = await r.json();
+  if (json.error) throw new Error(json.error);
+  // decode base64 → Uint8Array
+  const bin = atob(json.data);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  pdfCache[fileId] = arr;
+  return arr;
+}
+
+async function renderPdfSlides(file, host) {
+  await ensurePdfjs();
+  const data = await fetchPdfViaScript(file.id);
+  const pdfDoc = await pdfjsLib.getDocument({ data }).promise;
+  const numPages = pdfDoc.numPages;
+
+  // Auto-save detected page count
+  if (!filePages[file.id] || filePages[file.id] < numPages) {
+    filePages[file.id] = numPages;
+    try { localStorage.setItem('sjps_pages', JSON.stringify(filePages)); } catch(e) {}
+    // Update input if visible
+    const inp = document.querySelector(`input[data-pages-id="${file.id}"]`);
+    if (inp) inp.value = numPages;
+  }
+
+  for (let p = 1; p <= numPages; p++) {
+    const page = await pdfDoc.getPage(p);
+    const vp = page.getViewport({ scale: 1 });
+    const scale = Math.min(window.screen.width / vp.width, window.screen.height / vp.height) * 0.98;
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width; canvas.height = viewport.height;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    const div = document.createElement('div'); div.className = 'slide';
+    div.appendChild(canvas); host.appendChild(div);
+    slides.push({ id: file.id + '_p' + p, name: file.name + ' p' + p,
+                  mimeType: file.mimeType, durationKey: file.id, isPage: true });
+  }
+}
+
+async function buildSlideEls() {
   const host = document.getElementById('slideshow');
-  host.innerHTML = '';
-  slides = [];
+  host.innerHTML = ''; slides = [];
 
   const mediaFiles = allFiles.filter(f => {
     const m = f.mimeType || '';
@@ -360,15 +421,18 @@ function buildSlideEls() {
     const m = file.mimeType || '';
 
     if (m === 'application/pdf') {
-      // 用 Google Docs Viewer pg 參數逐頁顯示 — 不需要 CORS，最可靠
-      const pages = filePages[file.id] || 1;
-      for (let p = 1; p <= pages; p++) {
+      try {
+        await renderPdfSlides(file, host);
+      } catch(e) {
+        console.warn('PDF render failed:', e);
+        // fallback: single iframe slide
         const div = document.createElement('div'); div.className = 'slide';
         const fr = document.createElement('iframe');
-        fr.src = `https://docs.google.com/viewer?srcid=${file.id}&pg=${p}&embedded=true`;
-        fr.setAttribute('allowfullscreen', '');
+        fr.src = `https://drive.google.com/file/d/${file.id}/preview`;
+        fr.setAttribute('allowfullscreen', ''); fr.setAttribute('allow', 'autoplay');
         div.appendChild(fr); host.appendChild(div);
-        slides.push({ id: file.id + '_p' + p, name: file.name + ' p' + p, mimeType: m, durationKey: file.id, isPage: true });
+        slides.push({ ...file, _fallback: true });
+        showToast(`⚠ ${file.name} 無法拆頁，請確認 Script 已更新`);
       }
     } else if (m.startsWith('image/')) {
       const div = document.createElement('div'); div.className = 'slide';
@@ -590,7 +654,7 @@ async function deleteFile(fileId, fileName) {
     updateDriveList(allFiles);
     // 若目前在播放被刪除的那張，跳到下一張
     if (slides.length === 0) { showSetup(); return; }
-    buildSlideEls();
+    await buildSlideEls();
     goTo(Math.min(currentIdx, slides.length - 1));
   } catch(e) {
     showToast(`✗ 刪除失敗：${e.message}`);
@@ -630,7 +694,7 @@ function updateDriveList(files) {
           <input class="dl-dur-inp" type="number" min="1" max="999"
             value="${curPages}" placeholder="？"
             title="PDF 有幾頁？填入後每頁會獨立播放"
-            onchange="setPdfPages('${f.id}', this.value)">
+            onchange="setPdfPages('${f.id}', this.value)" data-pages-id="${f.id}">
         </label>` : ''}
         <label class="dl-ctrl-label">${isPdf ? '每頁秒數' : '播放秒數'}
           <input class="dl-dur-inp" type="number" min="1" max="999"
@@ -657,7 +721,7 @@ function setPdfPages(fileId, val) {
   else delete filePages[fileId];
   try { localStorage.setItem('sjps_pages', JSON.stringify(filePages)); } catch(e){}
   // 重建投影片
-  buildSlideEls();
+  await buildSlideEls();
   goTo(0);
   showToast('✓ 已更新頁數，重新建立投影片');
 }
