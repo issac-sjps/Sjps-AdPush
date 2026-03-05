@@ -227,6 +227,15 @@
     .zone-cfg { border:1.5px solid var(--border); border-radius:var(--r); padding:16px 18px; margin-top:12px; }
     .zone-cfg-title { font-family:var(--mono); font-size:11px; letter-spacing:3px; color:var(--sub); text-transform:uppercase; margin-bottom:12px; }
 
+
+    /* Upload zone selector */
+    .upload-zone-row { display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+    .uz-btn { background:var(--surface); border:1.5px solid var(--border); color:var(--sub);
+      font-family:var(--mono); font-size:12px; padding:7px 16px; border-radius:var(--r);
+      cursor:pointer; transition:all 0.2s; }
+    .uz-btn.active { border-color:var(--accent); color:var(--accent); background:#fff8f5; font-weight:600; }
+    #uz-b.active { border-color:#3a9ad9; color:#3a9ad9; background:#f0f8ff; }
+
     /* Toast */
     #toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--text); color:#fff; padding:12px 26px; border-radius:var(--r); font-size:14px; z-index:9999; transition:transform 0.3s; pointer-events:none; white-space:nowrap; }
     #toast.show { transform:translateX(-50%) translateY(0); }
@@ -356,6 +365,11 @@
 
     <div class="adm-section">
       <div class="adm-label">上傳媒體 · Upload &nbsp;<span id="upload-mode-badge" class="mode-badge"></span></div>
+      <div class="upload-zone-row">
+        <span style="font-size:13px;color:var(--sub);font-family:var(--mono)">上傳到：</span>
+        <button class="uz-btn active" id="uz-a" onclick="setUploadZone('a')">▐ Zone A（主要）</button>
+        <button class="uz-btn" id="uz-b" onclick="setUploadZone('b')">▐ Zone B（右側）</button>
+      </div>
       <div id="drop-zone" onclick="document.getElementById('file-input').click()">
         <div class="dz-icon">📂</div>
         <div class="dz-main">拖曳檔案到這裡，或點擊選擇</div>
@@ -393,7 +407,7 @@ let CONFIG = {
   SLIDE_DURATION_B: 4,          // Zone B 預設秒數
   LAYOUT_MODE:    'single',     // 'single' | 'split'
   LAYOUT_RATIO:   50,           // 左側百分比
-  SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxevpeDdQiKd72V_ELCe_rPhjqkzCsp0hEX2Zrf8zOgzfGpnbuvdo7w2TkiDghmN5aIwA/exec',
+  SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxGqwoNj86h0w56otayYe1a36d6ibWlTx2_WTLmvI68DxgaIq2iXK0eEMGs_fcMJpBcnA/exec',
   SCOPES: 'https://www.googleapis.com/auth/drive'
 };
 
@@ -405,6 +419,17 @@ let slideTimer = null, progressRaf = null, progressStart = null;
 let slideTimerB = null, progressRafB = null, progressStartB = null;
 let adminOpen = false, tokenClient = null, accessToken = null, gapiReady = false;
 let fileDurations = {};
+let uploadZone = 'a'; // which zone to upload to
+
+function setUploadZone(zone) {
+  uploadZone = zone;
+  document.getElementById('uz-a').classList.toggle('active', zone === 'a');
+  document.getElementById('uz-b').classList.toggle('active', zone === 'b');
+  const badge = zone === 'b'
+    ? (CONFIG.FOLDER_ID_B ? '→ Zone B：' + CONFIG.FOLDER_ID_B.slice(0,12) + '…' : '⚠ Zone B 資料夾未設定')
+    : '→ Zone A（主要資料夾）';
+  showToast(badge);
+}
 
 // ── BOOT ──────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
@@ -580,18 +605,20 @@ async function ensurePdfjs() {
 }
 
 // Fetch PDF via Apps Script (bypasses CORS completely)
+// Cache as base64 string, decode fresh each time to avoid ArrayBuffer detach
 async function fetchPdfViaScript(fileId) {
-  if (pdfCache[fileId]) return pdfCache[fileId];
   if (!CONFIG.SCRIPT_URL) throw new Error('未設定 Script 網址');
-  const r = await fetch(`${CONFIG.SCRIPT_URL}?id=${fileId}`);
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  const json = await r.json();
-  if (json.error) throw new Error(json.error);
-  // decode base64 → Uint8Array
-  const bin = atob(json.data);
+  if (!pdfCache[fileId]) {
+    const r = await fetch(`${CONFIG.SCRIPT_URL}?id=${fileId}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const json = await r.json();
+    if (json.error) throw new Error(json.error);
+    pdfCache[fileId] = json.data; // store as base64 string
+  }
+  // Always decode fresh Uint8Array to prevent detached buffer error
+  const bin = atob(pdfCache[fileId]);
   const arr = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-  pdfCache[fileId] = arr;
   return arr;
 }
 
@@ -795,7 +822,7 @@ function setupKeyboard() {
     else if (e.key === 'a' || e.key === 'A') openAdmin();
     else if (e.key === 'f' || e.key === 'F') toggleFS();
   });
-  document.getElementById('slideshow').addEventListener('click', () => { if (!adminOpen) next(); });
+  document.getElementById('stage').addEventListener('click', () => { if (!adminOpen) next(); });
 }
 function toggleFS() {
   if (!document.fullscreenElement) {
@@ -886,9 +913,11 @@ async function uploadFile(file) {
   ul.prepend(item);
   const st = item.querySelector('.ul-status');
   try {
+    const targetFolder = (uploadZone === 'b' && CONFIG.FOLDER_ID_B) ? CONFIG.FOLDER_ID_B : CONFIG.FOLDER_ID;
+    if (uploadZone === 'b' && !CONFIG.FOLDER_ID_B) throw new Error('請先設定 Zone B 資料夾 ID');
     if (accessToken) {
       // 方式 A：OAuth 登入上傳
-      const meta = { name: file.name, parents: [CONFIG.FOLDER_ID] };
+      const meta = { name: file.name, parents: [targetFolder] };
       const form = new FormData();
       form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
       form.append('file', file);
@@ -901,7 +930,7 @@ async function uploadFile(file) {
       await fetch(CONFIG.SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
-        body: JSON.stringify({ name: file.name, mimeType: file.type, data: base64 })
+        body: JSON.stringify({ name: file.name, mimeType: file.type, data: base64, folderId: targetFolder })
       });
     }
     st.textContent = '✓ 完成'; st.className = 'ul-status done';
