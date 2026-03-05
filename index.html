@@ -107,6 +107,9 @@
     .dl-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500; }
     .dl-type { font-family:var(--mono); font-size:11px; color:var(--sub); letter-spacing:1px; }
     .empty-list { font-size:15px; color:var(--sub); padding:8px 0; }
+    .btn-delete { background:#fff0f0; border:1.5px solid #f5c0c0; color:var(--err); font-size:12px; font-family:var(--mono); padding:5px 12px; border-radius:6px; cursor:pointer; flex-shrink:0; transition:background 0.2s; }
+    .btn-delete:hover { background:#fde0e0; }
+    .dl-login-hint { font-size:11px; color:#ccc; font-family:var(--mono); flex-shrink:0; }
 
     /* Toast */
     #toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--text); color:#fff; padding:12px 26px; border-radius:var(--r); font-size:14px; z-index:9999; transition:transform 0.3s; pointer-events:none; white-space:nowrap; }
@@ -204,10 +207,21 @@
 <div id="toast"></div>
 
 <script>
-let CONFIG = { FOLDER_ID:'18_RG5qrn-8WVxyq6QwyNIW3afIMtKZGi', API_KEY:'AIzaSyDiKpm2ZZU7I2JO2XR6SPAWALvFgf0ifWU', CLIENT_ID:'488969442881-g1vrrsg5h6dbl3dirk23mm4iofsm5c36.apps.googleusercontent.com', SLIDE_DURATION:8, SCOPES:'https://www.googleapis.com/auth/drive.file' };
-let slides=[], currentIdx=0, slideTimer=null, progressRaf=null, progressStart=null;
-let adminOpen=false, tokenClient=null, accessToken=null, gapiReady=false;
+let CONFIG = {
+  FOLDER_ID:      '18_RG5qrn-8WVxyq6QwyNIW3afIMtKZGi',
+  API_KEY:        'AIzaSyDiKpm2ZZU7I2JO2XR6SPAWALvFgf0ifWU',
+  CLIENT_ID:      '488969442881-g1vrrsg5h6dbl3dirk23mm4iofsm5c36.apps.googleusercontent.com',
+  SLIDE_DURATION: 8,
+  // drive 權限：可上傳 + 刪除任何資料夾內的檔案
+  SCOPES: 'https://www.googleapis.com/auth/drive'
+};
 
+let allFiles = [];   // 所有檔案（含非媒體）
+let slides = [], currentIdx = 0;
+let slideTimer = null, progressRaf = null, progressStart = null;
+let adminOpen = false, tokenClient = null, accessToken = null, gapiReady = false;
+
+// ── BOOT ──────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
   loadConfig(); setupKeyboard(); setupDropZone();
   document.getElementById('admin-trigger').addEventListener('click', openAdmin);
@@ -218,172 +232,308 @@ window.onGapiLoad = function() {
   gapi.load('client', async () => {
     if (!CONFIG.API_KEY) { hideLoading(); showSetup(); return; }
     try {
-      await gapi.client.init({ apiKey:CONFIG.API_KEY, discoveryDocs:['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'] });
-      gapiReady=true; await fetchAndBuildSlides();
+      await gapi.client.init({ apiKey: CONFIG.API_KEY, discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'] });
+      gapiReady = true;
+      await fetchAndBuildSlides();
     } catch(e) { console.error(e); hideLoading(); showSetup(); }
   });
 };
 
+// ── CONFIG ──────────────────────────────────────
 function loadConfig() {
-  try { const s=localStorage.getItem('sjps_cfg'); if(s) CONFIG={...CONFIG,...JSON.parse(s)}; } catch(e){}
+  try { const s = localStorage.getItem('sjps_cfg'); if (s) CONFIG = { ...CONFIG, ...JSON.parse(s) }; } catch(e) {}
   syncInputs();
 }
 function syncInputs() {
-  document.getElementById('inp-apikey').value   = CONFIG.API_KEY||'';
-  document.getElementById('inp-clientid').value = CONFIG.CLIENT_ID||'';
-  document.getElementById('inp-folderid').value = CONFIG.FOLDER_ID||'';
-  document.getElementById('inp-duration').value = CONFIG.SLIDE_DURATION||8;
+  document.getElementById('inp-apikey').value   = CONFIG.API_KEY || '';
+  document.getElementById('inp-clientid').value = CONFIG.CLIENT_ID || '';
+  document.getElementById('inp-folderid').value = CONFIG.FOLDER_ID || '';
+  document.getElementById('inp-duration').value = CONFIG.SLIDE_DURATION || 8;
 }
 function saveConfig() {
   CONFIG.API_KEY        = document.getElementById('inp-apikey').value.trim();
   CONFIG.CLIENT_ID      = document.getElementById('inp-clientid').value.trim();
   CONFIG.FOLDER_ID      = document.getElementById('inp-folderid').value.trim();
-  CONFIG.SLIDE_DURATION = parseInt(document.getElementById('inp-duration').value)||8;
+  CONFIG.SLIDE_DURATION = parseInt(document.getElementById('inp-duration').value) || 8;
   localStorage.setItem('sjps_cfg', JSON.stringify(CONFIG));
-  showToast('✓ 設定已儲存'); refreshFiles();
+  showToast('✓ 設定已儲存');
+  refreshFiles();
 }
 
+// ── FETCH ────────────────────────────────────────
 async function fetchAndBuildSlides() {
-  if (!CONFIG.API_KEY||!CONFIG.FOLDER_ID) { hideLoading(); showSetup(); return; }
+  if (!CONFIG.API_KEY || !CONFIG.FOLDER_ID) { hideLoading(); showSetup(); return; }
   try {
-    const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=%27${CONFIG.FOLDER_ID}%27+in+parents+and+trashed%3Dfalse&fields=files(id,name,mimeType)&orderBy=name&pageSize=100&key=${CONFIG.API_KEY}`);
+    const r = await fetch(
+      `https://www.googleapis.com/drive/v3/files` +
+      `?q=%27${CONFIG.FOLDER_ID}%27+in+parents+and+trashed%3Dfalse` +
+      `&fields=files(id,name,mimeType)&orderBy=name&pageSize=100&key=${CONFIG.API_KEY}`
+    );
     if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
     const data = await r.json();
-    const all = data.files||[];
-    slides = all.filter(f=>{ const m=f.mimeType||''; return m.startsWith('image/')||m==='application/pdf'||m.includes('presentationml')||m.includes('powerpoint')||m.startsWith('video/'); });
-    updateDriveList(all); hideLoading();
+    allFiles = data.files || [];
+
+    slides = allFiles.filter(f => {
+      const m = f.mimeType || '';
+      return m.startsWith('image/') || m === 'application/pdf' ||
+             m.includes('presentationml') || m.includes('powerpoint') || m.startsWith('video/');
+    });
+
+    updateDriveList(allFiles);
+    hideLoading();
+
     if (!slides.length) { showSetup(); return; }
-    buildSlideEls(); startSlideshow();
+    buildSlideEls();
+    startSlideshow();
     document.getElementById('setup-screen').classList.remove('show');
+
   } catch(e) {
     console.error(e); hideLoading(); showSetup();
-    document.getElementById('drive-list').innerHTML=`<p class="empty-list" style="color:var(--err)">⚠ 無法讀取：${e.message}<br>請確認 API 金鑰正確，且資料夾已設為「公開」</p>`;
+    document.getElementById('drive-list').innerHTML =
+      `<p class="empty-list" style="color:var(--err)">⚠ 無法讀取：${e.message}<br>
+       請確認 API 金鑰正確，且資料夾已設為「公開」<br>
+       ⚠ API 金鑰需在 Google Cloud 允許 <code>https://issac-sjps.github.io/*</code></p>`;
   }
 }
 
 async function refreshFiles() {
   clearTimeout(slideTimer); cancelAnimationFrame(progressRaf);
-  document.getElementById('slideshow').innerHTML=''; document.getElementById('dots').innerHTML='';
-  slides=[]; currentIdx=0;
-  const l=document.getElementById('loading'); l.style.display='flex'; l.classList.remove('hide');
-  if (CONFIG.API_KEY&&!gapiReady) { try { await gapi.client.init({apiKey:CONFIG.API_KEY,discoveryDocs:['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']}); gapiReady=true; } catch(e){} }
+  document.getElementById('slideshow').innerHTML = '';
+  document.getElementById('dots').innerHTML = '';
+  slides = []; currentIdx = 0; allFiles = [];
+  const l = document.getElementById('loading');
+  l.style.display = 'flex'; l.classList.remove('hide');
+  if (CONFIG.API_KEY && !gapiReady) {
+    try {
+      await gapi.client.init({ apiKey: CONFIG.API_KEY, discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'] });
+      gapiReady = true;
+    } catch(e) {}
+  }
   await fetchAndBuildSlides();
 }
 
+// ── SLIDES ───────────────────────────────────────
 function buildSlideEls() {
-  const host=document.getElementById('slideshow'); host.innerHTML='';
-  slides.forEach((file,i)=>{
-    const div=document.createElement('div'); div.className='slide';
-    const m=file.mimeType||'';
+  const host = document.getElementById('slideshow');
+  host.innerHTML = '';
+  slides.forEach((file) => {
+    const div = document.createElement('div');
+    div.className = 'slide';
+    const m = file.mimeType || '';
     if (m.startsWith('image/')) {
-      const img=document.createElement('img');
-      img.src=`https://drive.google.com/uc?export=view&id=${file.id}`; img.alt=file.name;
+      const img = document.createElement('img');
+      img.src = `https://drive.google.com/uc?export=view&id=${file.id}`;
+      img.alt = file.name;
       div.appendChild(img);
     } else {
-      const fr=document.createElement('iframe');
-      fr.src=`https://drive.google.com/file/d/${file.id}/preview`;
-      fr.setAttribute('allowfullscreen',''); fr.setAttribute('allow','autoplay'); div.appendChild(fr);
+      const fr = document.createElement('iframe');
+      fr.src = `https://drive.google.com/file/d/${file.id}/preview`;
+      fr.setAttribute('allowfullscreen', '');
+      fr.setAttribute('allow', 'autoplay');
+      div.appendChild(fr);
     }
     host.appendChild(div);
   });
   buildDots();
 }
+
 function buildDots() {
-  const el=document.getElementById('dots'); el.innerHTML='';
-  if (slides.length<=1) return;
-  for (let i=0;i<Math.min(slides.length,30);i++) { const d=document.createElement('div'); d.className='dot'; el.appendChild(d); }
+  const el = document.getElementById('dots');
+  el.innerHTML = '';
+  if (slides.length <= 1) return;
+  for (let i = 0; i < Math.min(slides.length, 30); i++) {
+    const d = document.createElement('div'); d.className = 'dot'; el.appendChild(d);
+  }
 }
 
+// ── PLAYBACK ─────────────────────────────────────
 function startSlideshow() { goTo(0); }
+
 function goTo(idx) {
   if (!slides.length) return;
-  idx=((idx%slides.length)+slides.length)%slides.length; currentIdx=idx;
-  document.querySelectorAll('.slide').forEach((s,i)=>s.classList.toggle('active',i===idx));
-  document.querySelectorAll('.dot').forEach((d,i)=>d.classList.toggle('active',i===idx));
-  document.getElementById('counter').textContent=slides.length>1?`${String(idx+1).padStart(2,'0')} / ${String(slides.length).padStart(2,'0')}`:'';
+  idx = ((idx % slides.length) + slides.length) % slides.length;
+  currentIdx = idx;
+  document.querySelectorAll('.slide').forEach((s, i) => s.classList.toggle('active', i === idx));
+  document.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i === idx));
+  const n = slides.length;
+  document.getElementById('counter').textContent = n > 1
+    ? `${String(idx + 1).padStart(2, '0')} / ${String(n).padStart(2, '0')}` : '';
   scheduleNext();
 }
+
 function scheduleNext() {
   clearTimeout(slideTimer); cancelAnimationFrame(progressRaf);
-  if (slides.length<=1) { document.getElementById('progress').style.width='0%'; return; }
-  const dur=(CONFIG.SLIDE_DURATION||8)*1000;
-  const bar=document.getElementById('progress'); bar.style.transition='none'; bar.style.width='0%';
-  progressStart=performance.now();
-  function tick(now) { bar.style.width=Math.min((now-progressStart)/dur*100,100)+'%'; if((now-progressStart)<dur) progressRaf=requestAnimationFrame(tick); }
+  const dur = (CONFIG.SLIDE_DURATION || 8) * 1000;
+  const bar = document.getElementById('progress');
+  bar.style.transition = 'none'; bar.style.width = '0%';
+
+  // 就算只有 1 張，也要讓進度條跑（視覺效果），不自動換頁
+  progressStart = performance.now();
+  function tick(now) {
+    const pct = Math.min((now - progressStart) / dur * 100, 100);
+    bar.style.width = pct + '%';
+    if (pct < 100) progressRaf = requestAnimationFrame(tick);
+  }
   requestAnimationFrame(tick);
-  slideTimer=setTimeout(()=>goTo(currentIdx+1),dur);
-}
-function next() { goTo(currentIdx+1); }
-function prev() { goTo(currentIdx-1); }
 
+  if (slides.length > 1) {
+    slideTimer = setTimeout(() => goTo(currentIdx + 1), dur);
+  }
+}
+
+function next() { goTo(currentIdx + 1); }
+function prev() { goTo(currentIdx - 1); }
+
+// ── KEYBOARD ─────────────────────────────────────
 function setupKeyboard() {
-  document.addEventListener('keydown', e=>{
-    if (adminOpen) { if(e.key==='Escape') closeAdmin(); return; }
-    if (['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) return;
-    if (e.key==='ArrowRight'||e.key===' ') next();
-    else if (e.key==='ArrowLeft') prev();
-    else if (e.key==='a'||e.key==='A') openAdmin();
-    else if (e.key==='f'||e.key==='F') toggleFS();
+  document.addEventListener('keydown', e => {
+    if (adminOpen) { if (e.key === 'Escape') closeAdmin(); return; }
+    if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+    if (e.key === 'ArrowRight' || e.key === ' ') next();
+    else if (e.key === 'ArrowLeft') prev();
+    else if (e.key === 'a' || e.key === 'A') openAdmin();
+    else if (e.key === 'f' || e.key === 'F') toggleFS();
   });
-  document.getElementById('slideshow').addEventListener('click',()=>{ if(!adminOpen) next(); });
+  document.getElementById('slideshow').addEventListener('click', () => { if (!adminOpen) next(); });
 }
-function toggleFS() { if(!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); }
+function toggleFS() {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+}
 
-function openAdmin() { adminOpen=true; clearTimeout(slideTimer); cancelAnimationFrame(progressRaf); document.getElementById('admin-overlay').classList.add('open'); }
-function closeAdmin() { adminOpen=false; document.getElementById('admin-overlay').classList.remove('open'); if(slides.length>0) scheduleNext(); }
+// ── ADMIN ────────────────────────────────────────
+function openAdmin() {
+  adminOpen = true;
+  clearTimeout(slideTimer); cancelAnimationFrame(progressRaf);
+  document.getElementById('admin-overlay').classList.add('open');
+  updateDriveList(allFiles); // 重新渲染（含刪除按鈕狀態）
+}
+function closeAdmin() {
+  adminOpen = false;
+  document.getElementById('admin-overlay').classList.remove('open');
+  if (slides.length > 0) scheduleNext();
+}
 
+// ── AUTH ─────────────────────────────────────────
 function handleAuth() {
   if (accessToken) {
-    accessToken=null; document.getElementById('btn-auth').textContent='🔑 使用 Google 登入';
-    const s=document.getElementById('auth-status'); s.textContent='已登出'; s.className=''; return;
+    accessToken = null;
+    document.getElementById('btn-auth').textContent = '🔑 使用 Google 登入';
+    const s = document.getElementById('auth-status'); s.textContent = '已登出'; s.className = '';
+    updateDriveList(allFiles); return;
   }
   if (!CONFIG.CLIENT_ID) { showToast('請先填入 OAuth Client ID'); return; }
   if (!tokenClient) {
-    tokenClient=google.accounts.oauth2.initTokenClient({ client_id:CONFIG.CLIENT_ID, scope:CONFIG.SCOPES, callback:r=>{
-      if(r.error){console.error(r);return;}
-      accessToken=r.access_token; document.getElementById('btn-auth').textContent='🔓 登出 Google';
-      const s=document.getElementById('auth-status'); s.textContent='✓ 已登入，可以上傳檔案'; s.className='ok';
-    }});
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CONFIG.CLIENT_ID,
+      scope: CONFIG.SCOPES,
+      callback: r => {
+        if (r.error) { console.error(r); return; }
+        accessToken = r.access_token;
+        document.getElementById('btn-auth').textContent = '🔓 登出 Google';
+        const s = document.getElementById('auth-status');
+        s.textContent = '✓ 已登入，可以上傳 / 刪除檔案'; s.className = 'ok';
+        updateDriveList(allFiles); // 重新渲染（顯示刪除按鈕）
+      }
+    });
   }
   tokenClient.requestAccessToken();
 }
 
+// ── UPLOAD ───────────────────────────────────────
 function setupDropZone() {
-  const dz=document.getElementById('drop-zone'), fi=document.getElementById('file-input');
-  dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
-  dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
-  dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');handleFiles(e.dataTransfer.files);});
-  fi.addEventListener('change',()=>handleFiles(fi.files));
+  const dz = document.getElementById('drop-zone'), fi = document.getElementById('file-input');
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+  dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('over'); handleFiles(e.dataTransfer.files); });
+  fi.addEventListener('change', () => handleFiles(fi.files));
 }
-function handleFiles(list) { if(!accessToken){showToast('請先登入 Google 帳號');return;} Array.from(list).forEach(uploadFile); }
+function handleFiles(list) {
+  if (!accessToken) { showToast('請先登入 Google 帳號'); return; }
+  Array.from(list).forEach(uploadFile);
+}
 async function uploadFile(file) {
-  const ul=document.getElementById('upload-list');
-  const item=document.createElement('div'); item.className='ul-item';
-  item.innerHTML=`<span class="ul-name">${file.name}</span><span class="ul-status uploading">上傳中…</span>`;
-  ul.prepend(item); const st=item.querySelector('.ul-status');
+  const ul = document.getElementById('upload-list');
+  const item = document.createElement('div'); item.className = 'ul-item';
+  item.innerHTML = `<span class="ul-name">${file.name}</span><span class="ul-status uploading">上傳中…</span>`;
+  ul.prepend(item);
+  const st = item.querySelector('.ul-status');
   try {
-    const meta={name:file.name,parents:[CONFIG.FOLDER_ID]};
-    const form=new FormData();
-    form.append('metadata',new Blob([JSON.stringify(meta)],{type:'application/json'}));
-    form.append('file',file);
-    const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
-      {method:'POST',headers:{Authorization:`Bearer ${accessToken}`},body:form});
-    if(!r.ok) throw new Error((await r.json()).error?.message||r.statusText);
-    st.textContent='✓ 完成'; st.className='ul-status done'; showToast(`✓ ${file.name} 上傳完成`);
-    setTimeout(refreshFiles,1500);
-  } catch(e) { st.textContent='✗ 失敗'; st.className='ul-status error'; showToast(`✗ 失敗：${e.message}`); }
+    const meta = { name: file.name, parents: [CONFIG.FOLDER_ID] };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
+    form.append('file', file);
+    const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+      { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` }, body: form });
+    if (!r.ok) throw new Error((await r.json()).error?.message || r.statusText);
+    st.textContent = '✓ 完成'; st.className = 'ul-status done';
+    showToast(`✓ ${file.name} 上傳完成`);
+    setTimeout(refreshFiles, 1500);
+  } catch(e) {
+    st.textContent = '✗ 失敗'; st.className = 'ul-status error';
+    showToast(`✗ 失敗：${e.message}`);
+  }
 }
 
+// ── DELETE ───────────────────────────────────────
+async function deleteFile(fileId, fileName) {
+  if (!accessToken) { showToast('請先登入 Google 帳號才能刪除'); return; }
+  if (!confirm(`確定要刪除「${fileName}」嗎？\n（此動作無法復原）`)) return;
+  try {
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`,
+      { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!r.ok && r.status !== 204) throw new Error(`HTTP ${r.status}`);
+    showToast(`🗑 已刪除 ${fileName}`);
+    // 更新本地清單
+    allFiles = allFiles.filter(f => f.id !== fileId);
+    slides   = slides.filter(f => f.id !== fileId);
+    updateDriveList(allFiles);
+    // 若目前在播放被刪除的那張，跳到下一張
+    if (slides.length === 0) { showSetup(); return; }
+    buildSlideEls();
+    goTo(Math.min(currentIdx, slides.length - 1));
+  } catch(e) {
+    showToast(`✗ 刪除失敗：${e.message}`);
+    console.error(e);
+  }
+}
+
+// ── DRIVE LIST (with delete buttons) ─────────────
 function updateDriveList(files) {
-  const el=document.getElementById('drive-list');
-  if (!files.length) { el.innerHTML='<p class="empty-list">資料夾內尚無媒體檔案</p>'; return; }
-  const icon=m=>{ if(m.startsWith('image/'))return'🖼️'; if(m.includes('pdf'))return'📄'; if(m.includes('presentation')||m.includes('powerpoint'))return'📊'; if(m.startsWith('video/'))return'🎬'; return'📁'; };
-  el.innerHTML=files.map(f=>`<div class="dl-item"><span class="dl-icon">${icon(f.mimeType)}</span><span class="dl-name">${f.name}</span><span class="dl-type">${(f.mimeType||'').split('/').pop().toUpperCase()}</span></div>`).join('');
+  const el = document.getElementById('drive-list');
+  if (!files.length) { el.innerHTML = '<p class="empty-list">資料夾內尚無媒體檔案</p>'; return; }
+  const icon = m => {
+    if (m.startsWith('image/')) return '🖼️';
+    if (m.includes('pdf')) return '📄';
+    if (m.includes('presentation') || m.includes('powerpoint')) return '📊';
+    if (m.startsWith('video/')) return '🎬';
+    return '📁';
+  };
+  el.innerHTML = '';
+  files.forEach(f => {
+    const div = document.createElement('div'); div.className = 'dl-item';
+    div.innerHTML = `
+      <span class="dl-icon">${icon(f.mimeType || '')}</span>
+      <span class="dl-name">${f.name}</span>
+      <span class="dl-type">${(f.mimeType || '').split('/').pop().toUpperCase()}</span>
+      ${accessToken
+        ? `<button class="btn-delete" onclick="deleteFile('${f.id}','${f.name.replace(/'/g,"\\'")}')">🗑 刪除</button>`
+        : '<span class="dl-login-hint">登入後可刪除</span>'
+      }`;
+    el.appendChild(div);
+  });
 }
 
-function hideLoading() { const el=document.getElementById('loading'); el.classList.add('hide'); setTimeout(()=>el.style.display='none',500); }
+// ── HELPERS ──────────────────────────────────────
+function hideLoading() {
+  const el = document.getElementById('loading'); el.classList.add('hide');
+  setTimeout(() => el.style.display = 'none', 500);
+}
 function showSetup() { document.getElementById('setup-screen').classList.add('show'); }
-function showToast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2800); }
+function showToast(msg) {
+  const t = document.getElementById('toast'); t.textContent = msg;
+  t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2800);
+}
 </script>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
