@@ -124,6 +124,13 @@
     pre.code-block { background:#1a1917; color:#f2efe8; font-family:var(--mono); font-size:12px; line-height:1.7; padding:16px 18px; border-radius:6px; overflow-x:auto; margin:10px 0; white-space:pre; }
     .delete-auth-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:18px; padding-top:16px; border-top:1px solid var(--border); }
     .mode-badge { font-size:11px; padding:2px 10px; border-radius:20px; font-family:var(--mono); }
+
+    /* Per-file duration in drive list */
+    .dl-dur-wrap { display:flex; align-items:center; gap:4px; flex-shrink:0; }
+    .dl-dur-inp { width:58px; background:var(--surface); border:1.5px solid var(--border); color:var(--text); font-family:var(--mono); font-size:13px; padding:5px 8px; border-radius:6px; text-align:center; outline:none; transition:border-color 0.2s; }
+    .dl-dur-inp:focus { border-color:var(--accent); }
+    .dl-dur-label { font-size:12px; color:var(--sub); font-family:var(--mono); }
+    .pdf-note { font-style:normal; font-size:11px; color:var(--sub); background:#f0eeea; padding:1px 7px; border-radius:4px; margin-left:6px; }
     /* Toast */
     #toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--text); color:#fff; padding:12px 26px; border-radius:var(--r); font-size:14px; z-index:9999; transition:transform 0.3s; pointer-events:none; white-space:nowrap; }
     #toast.show { transform:translateX(-50%) translateY(0); }
@@ -165,55 +172,21 @@
     </div>
 
     <div class="adm-section">
-      <div class="adm-label">系統設定 · Configuration</div>
+      <div class="adm-label">播放設定 · Playback</div>
       <div class="cfg-row">
-        <span class="cfg-key">API 金鑰</span>
-        <input class="cfg-val" id="inp-apikey" type="text" placeholder="AIzaSy...（Google Drive API Key）">
-      </div>
-      <div class="cfg-row">
-        <span class="cfg-key">Client ID</span>
-        <input class="cfg-val" id="inp-clientid" type="text" placeholder="xxx.apps.googleusercontent.com">
-      </div>
-      <div class="cfg-row">
-        <span class="cfg-key">資料夾 ID</span>
-        <input class="cfg-val" id="inp-folderid" type="text" placeholder="Google Drive 資料夾 ID">
-      </div>
-      <div class="cfg-row">
-        <span class="cfg-key">每張秒數</span>
+        <span class="cfg-key">預設秒數</span>
         <input class="cfg-val" id="inp-duration" type="number" placeholder="4" min="1" max="300">
       </div>
-      <div class="cfg-row">
-        <span class="cfg-key">Script 網址</span>
-        <input class="cfg-val" id="inp-scripturl" type="text" placeholder="https://script.google.com/macros/s/...（免登入上傳）">
-      </div>
+      <p style="font-size:13px;color:var(--sub);margin-top:8px">每個檔案可在下方清單單獨設定秒數，覆蓋此預設值。</p>
       <div class="btn-row">
         <button class="btn-primary" onclick="saveConfig()">💾 儲存設定</button>
         <button class="btn-ghost" onclick="refreshFiles()">↺ 重新載入</button>
-        <a class="btn-ghost" href="setup-guide.html" target="_blank">📖 設定教學</a>
       </div>
-      <div class="script-hint">
-        <div class="script-hint-title">📋 免登入上傳 — Apps Script 設定方式</div>
-        <ol class="script-steps">
-          <li>前往 <a href="https://script.google.com" target="_blank">script.google.com</a> → 新增專案，把以下程式碼貼上：</li>
-        </ol>
-        <pre class="code-block" id="script-code">const FOLDER_ID = '18_RG5qrn-8WVxyq6QwyNIW3afIMtKZGi';
-function doPost(e) {
-  try {
-    var j = JSON.parse(e.postData.contents);
-    var blob = Utilities.newBlob(Utilities.base64Decode(j.data), j.mimeType, j.name);
-    DriveApp.getFolderById(FOLDER_ID).createFile(blob);
-    return ContentService.createTextOutput('ok');
-  } catch(err) {
-    return ContentService.createTextOutput('error:' + err.message);
-  }
-}</pre>
-        <div class="btn-row"><button class="btn-ghost" onclick="copyScript()">📋 複製程式碼</button></div>
-        <ol class="script-steps" start="2">
-          <li>點「部署」→「新增部署作業」→ 類型：<strong>網頁應用程式</strong></li>
-          <li>執行身分：<strong>我</strong>，存取權：<strong>所有人</strong> → 部署</li>
-          <li>複製「網頁應用程式 URL」貼到上方「Script 網址」欄位 → 儲存設定</li>
-        </ol>
-      </div>
+      <!-- hidden inputs to preserve values -->
+      <input type="hidden" id="inp-apikey">
+      <input type="hidden" id="inp-clientid">
+      <input type="hidden" id="inp-folderid">
+      <input type="hidden" id="inp-scripturl">
     </div>
 
     <div class="adm-section">
@@ -252,7 +225,7 @@ let CONFIG = {
   CLIENT_ID:      '488969442881-g1vrrsg5h6dbl3dirk23mm4iofsm5c36.apps.googleusercontent.com',
   SLIDE_DURATION: 4,
   // drive 權限：可上傳 + 刪除任何資料夾內的檔案
-  SCRIPT_URL:     '',   // Apps Script URL for no-login upload
+  SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzt0-melj0RspXO8zfSjHNw3ybwpWixtyKcvx6RItQ--hBN4NAl-LcLOKcCjZx319Dz3A/exec',
   SCOPES: 'https://www.googleapis.com/auth/drive'
 };
 
@@ -260,6 +233,8 @@ let allFiles = [];   // 所有檔案（含非媒體）
 let slides = [], currentIdx = 0;
 let slideTimer = null, progressRaf = null, progressStart = null;
 let adminOpen = false, tokenClient = null, accessToken = null, gapiReady = false;
+// 每個檔案的自訂秒數，key = fileId（或 pdfId_pN），value = 秒數
+let fileDurations = {};
 
 // ── BOOT ──────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
@@ -282,6 +257,7 @@ window.onGapiLoad = function() {
 // ── CONFIG ──────────────────────────────────────
 function loadConfig() {
   try { const s = localStorage.getItem('sjps_cfg'); if (s) CONFIG = { ...CONFIG, ...JSON.parse(s) }; } catch(e) {}
+  try { const d = localStorage.getItem('sjps_dur'); if (d) fileDurations = JSON.parse(d); } catch(e) {}
   syncInputs();
 }
 function syncInputs() {
@@ -403,7 +379,7 @@ async function buildSlideEls() {
           const div = document.createElement('div'); div.className = 'slide';
           div.appendChild(canvas);
           host.appendChild(div);
-          slides.push({ id: file.id + '_p' + p, name: file.name + ' (p' + p + ')', mimeType: m });
+          slides.push({ id: file.id + '_p' + p, name: file.name + ' (p' + p + ')', mimeType: m, durationKey: file.id, isPage: true });
         }
       } catch(e) {
         // fallback: show as iframe if PDF.js fails
@@ -462,13 +438,20 @@ function goTo(idx) {
   scheduleNext();
 }
 
+function getCurrentDur() {
+  const slide = slides[currentIdx];
+  if (!slide) return (CONFIG.SLIDE_DURATION || 4) * 1000;
+  // check per-file or per-page duration
+  const key = slide.durationKey || slide.id;
+  const custom = fileDurations[key];
+  return ((custom !== undefined ? custom : CONFIG.SLIDE_DURATION) || 4) * 1000;
+}
+
 function scheduleNext() {
   clearTimeout(slideTimer); cancelAnimationFrame(progressRaf);
-  const dur = (CONFIG.SLIDE_DURATION || 8) * 1000;
+  const dur = getCurrentDur();
   const bar = document.getElementById('progress');
   bar.style.transition = 'none'; bar.style.width = '0%';
-
-  // 就算只有 1 張，也要讓進度條跑（視覺效果），不自動換頁
   progressStart = performance.now();
   function tick(now) {
     const pct = Math.min((now - progressStart) / dur * 100, 100);
@@ -476,7 +459,6 @@ function scheduleNext() {
     if (pct < 100) progressRaf = requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
-
   if (slides.length > 1) {
     slideTimer = setTimeout(() => goTo(currentIdx + 1), dur);
   }
@@ -640,7 +622,7 @@ async function deleteFile(fileId, fileName) {
   }
 }
 
-// ── DRIVE LIST (with delete buttons) ─────────────
+// ── DRIVE LIST (with delete + per-file duration) ──
 function updateDriveList(files) {
   const el = document.getElementById('drive-list');
   if (!files.length) { el.innerHTML = '<p class="empty-list">資料夾內尚無媒體檔案</p>'; return; }
@@ -653,17 +635,36 @@ function updateDriveList(files) {
   };
   el.innerHTML = '';
   files.forEach(f => {
+    const isPdf = (f.mimeType || '').includes('pdf');
+    const curDur = fileDurations[f.id] !== undefined ? fileDurations[f.id] : '';
     const div = document.createElement('div'); div.className = 'dl-item';
     div.innerHTML = `
       <span class="dl-icon">${icon(f.mimeType || '')}</span>
-      <span class="dl-name">${f.name}</span>
-      <span class="dl-type">${(f.mimeType || '').split('/').pop().toUpperCase()}</span>
+      <span class="dl-name">${f.name}${isPdf ? ' <em class="pdf-note">每頁共用此秒數</em>' : ''}</span>
+      <span class="dl-dur-wrap">
+        <input class="dl-dur-inp" type="number" min="1" max="999"
+          value="${curDur}" placeholder="${CONFIG.SLIDE_DURATION||4}"
+          title="此檔播放秒數（空白=使用預設）"
+          onchange="setFileDur('${f.id}', this.value)">
+        <span class="dl-dur-label">秒</span>
+      </span>
       ${accessToken
-        ? `<button class="btn-delete" onclick="deleteFile('${f.id}','${f.name.replace(/'/g,"\\'")}')">🗑 刪除</button>`
-        : '<span class="dl-login-hint">登入後可刪除</span>'
+        ? `<button class="btn-delete" onclick="deleteFile('${f.id}','${f.name.replace(/'/g,"\\'")}')">🗑</button>`
+        : '<span class="dl-login-hint">登入可刪</span>'
       }`;
     el.appendChild(div);
   });
+}
+
+function setFileDur(fileId, val) {
+  const n = parseInt(val);
+  if (!isNaN(n) && n > 0) {
+    fileDurations[fileId] = n;
+  } else {
+    delete fileDurations[fileId];
+  }
+  // save to localStorage
+  try { localStorage.setItem('sjps_dur', JSON.stringify(fileDurations)); } catch(e){}
 }
 
 // ── HELPERS ──────────────────────────────────────
