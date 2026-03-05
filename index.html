@@ -646,7 +646,7 @@ async function fetchZoneB() {
   }
 }
 
-function buildSlideEls(zone='a') {
+async function buildSlideEls(zone='a') {
   const zoneEl = document.getElementById('zone-' + zone);
   // remove old slides
   zoneEl.querySelectorAll('.zone-slide').forEach(e => e.remove());
