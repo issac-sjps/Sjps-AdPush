@@ -715,7 +715,7 @@ function setFileDur(fileId, val) {
   try { localStorage.setItem('sjps_dur', JSON.stringify(fileDurations)); } catch(e){}
 }
 
-function setPdfPages(fileId, val) {
+async function setPdfPages(fileId, val) {
   const n = parseInt(val);
   if (!isNaN(n) && n > 0) filePages[fileId] = n;
   else delete filePages[fileId];
