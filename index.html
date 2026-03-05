@@ -111,6 +111,16 @@
     .btn-delete:hover { background:#fde0e0; }
     .dl-login-hint { font-size:11px; color:#ccc; font-family:var(--mono); flex-shrink:0; }
 
+
+    /* Script hint box */
+    .script-hint { background:#f8f7f3; border:1.5px solid var(--border); border-radius:var(--r); padding:20px 22px; margin-top:18px; }
+    .script-hint-title { font-size:14px; font-weight:600; margin-bottom:12px; color:var(--text); }
+    .script-steps { padding-left:20px; font-size:14px; color:var(--sub); line-height:2; }
+    .script-steps a { color:var(--accent); }
+    .script-steps strong { color:var(--text); }
+    pre.code-block { background:#1a1917; color:#f2efe8; font-family:var(--mono); font-size:12px; line-height:1.7; padding:16px 18px; border-radius:6px; overflow-x:auto; margin:10px 0; white-space:pre; }
+    .delete-auth-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:18px; padding-top:16px; border-top:1px solid var(--border); }
+    .mode-badge { font-size:11px; padding:2px 10px; border-radius:20px; font-family:var(--mono); }
     /* Toast */
     #toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--text); color:#fff; padding:12px 26px; border-radius:var(--r); font-size:14px; z-index:9999; transition:transform 0.3s; pointer-events:none; white-space:nowrap; }
     #toast.show { transform:translateX(-50%) translateY(0); }
@@ -167,23 +177,44 @@
       </div>
       <div class="cfg-row">
         <span class="cfg-key">每張秒數</span>
-        <input class="cfg-val" id="inp-duration" type="number" placeholder="8" min="1" max="300">
+        <input class="cfg-val" id="inp-duration" type="number" placeholder="4" min="1" max="300">
+      </div>
+      <div class="cfg-row">
+        <span class="cfg-key">Script 網址</span>
+        <input class="cfg-val" id="inp-scripturl" type="text" placeholder="https://script.google.com/macros/s/...（免登入上傳）">
       </div>
       <div class="btn-row">
         <button class="btn-primary" onclick="saveConfig()">💾 儲存設定</button>
         <button class="btn-ghost" onclick="refreshFiles()">↺ 重新載入</button>
         <a class="btn-ghost" href="setup-guide.html" target="_blank">📖 設定教學</a>
       </div>
+      <div class="script-hint">
+        <div class="script-hint-title">📋 免登入上傳 — Apps Script 設定方式</div>
+        <ol class="script-steps">
+          <li>前往 <a href="https://script.google.com" target="_blank">script.google.com</a> → 新增專案，把以下程式碼貼上：</li>
+        </ol>
+        <pre class="code-block" id="script-code">const FOLDER_ID = '18_RG5qrn-8WVxyq6QwyNIW3afIMtKZGi';
+function doPost(e) {
+  try {
+    var j = JSON.parse(e.postData.contents);
+    var blob = Utilities.newBlob(Utilities.base64Decode(j.data), j.mimeType, j.name);
+    DriveApp.getFolderById(FOLDER_ID).createFile(blob);
+    return ContentService.createTextOutput('ok');
+  } catch(err) {
+    return ContentService.createTextOutput('error:' + err.message);
+  }
+}</pre>
+        <div class="btn-row"><button class="btn-ghost" onclick="copyScript()">📋 複製程式碼</button></div>
+        <ol class="script-steps" start="2">
+          <li>點「部署」→「新增部署作業」→ 類型：<strong>網頁應用程式</strong></li>
+          <li>執行身分：<strong>我</strong>，存取權：<strong>所有人</strong> → 部署</li>
+          <li>複製「網頁應用程式 URL」貼到上方「Script 網址」欄位 → 儲存設定</li>
+        </ol>
+      </div>
     </div>
 
     <div class="adm-section">
-      <div class="adm-label">Google 帳號授權 · 上傳功能</div>
-      <button class="btn-primary" id="btn-auth" onclick="handleAuth()">🔑 使用 Google 登入</button>
-      <div id="auth-status">尚未登入 · 登入後才能上傳檔案到 Drive</div>
-    </div>
-
-    <div class="adm-section">
-      <div class="adm-label">上傳媒體 · Upload</div>
+      <div class="adm-label">上傳媒體 · Upload &nbsp;<span id="upload-mode-badge" class="mode-badge"></span></div>
       <div id="drop-zone" onclick="document.getElementById('file-input').click()">
         <div class="dz-icon">📂</div>
         <div class="dz-main">拖曳檔案到這裡，或點擊選擇</div>
@@ -191,6 +222,11 @@
       </div>
       <input type="file" id="file-input" multiple accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.ppt,.pptx,.mp4,.mov">
       <div id="upload-list"></div>
+      <div class="delete-auth-row">
+        <span style="font-size:13px;color:var(--sub)">🗑 刪除功能需要登入：</span>
+        <button class="btn-ghost" id="btn-auth" onclick="handleAuth()">🔑 Google 登入</button>
+        <span id="auth-status" style="font-size:13px;color:var(--sub)">未登入</span>
+      </div>
     </div>
 
     <div class="adm-section">
@@ -211,8 +247,9 @@ let CONFIG = {
   FOLDER_ID:      '18_RG5qrn-8WVxyq6QwyNIW3afIMtKZGi',
   API_KEY:        'AIzaSyDiKpm2ZZU7I2JO2XR6SPAWALvFgf0ifWU',
   CLIENT_ID:      '488969442881-g1vrrsg5h6dbl3dirk23mm4iofsm5c36.apps.googleusercontent.com',
-  SLIDE_DURATION: 8,
+  SLIDE_DURATION: 4,
   // drive 權限：可上傳 + 刪除任何資料夾內的檔案
+  SCRIPT_URL:     '',   // Apps Script URL for no-login upload
   SCOPES: 'https://www.googleapis.com/auth/drive'
 };
 
@@ -248,13 +285,15 @@ function syncInputs() {
   document.getElementById('inp-apikey').value   = CONFIG.API_KEY || '';
   document.getElementById('inp-clientid').value = CONFIG.CLIENT_ID || '';
   document.getElementById('inp-folderid').value = CONFIG.FOLDER_ID || '';
-  document.getElementById('inp-duration').value = CONFIG.SLIDE_DURATION || 8;
+  document.getElementById('inp-duration').value = CONFIG.SLIDE_DURATION || 4;
+  const su = document.getElementById('inp-scripturl'); if(su) su.value = CONFIG.SCRIPT_URL||'';
 }
 function saveConfig() {
   CONFIG.API_KEY        = document.getElementById('inp-apikey').value.trim();
   CONFIG.CLIENT_ID      = document.getElementById('inp-clientid').value.trim();
   CONFIG.FOLDER_ID      = document.getElementById('inp-folderid').value.trim();
-  CONFIG.SLIDE_DURATION = parseInt(document.getElementById('inp-duration').value) || 8;
+  CONFIG.SLIDE_DURATION = parseInt(document.getElementById('inp-duration').value) || 4;
+  const sue = document.getElementById('inp-scripturl'); if(sue) CONFIG.SCRIPT_URL = sue.value.trim();
   localStorage.setItem('sjps_cfg', JSON.stringify(CONFIG));
   showToast('✓ 設定已儲存');
   refreshFiles();
@@ -406,7 +445,20 @@ function openAdmin() {
   adminOpen = true;
   clearTimeout(slideTimer); cancelAnimationFrame(progressRaf);
   document.getElementById('admin-overlay').classList.add('open');
-  updateDriveList(allFiles); // 重新渲染（含刪除按鈕狀態）
+  updateDriveList(allFiles);
+  updateUploadBadge();
+}
+
+function updateUploadBadge() {
+  const b = document.getElementById('upload-mode-badge');
+  if (!b) return;
+  if (CONFIG.SCRIPT_URL) {
+    b.textContent = '✓ 免登入模式'; b.style.cssText = 'background:#e8f5e9;color:#2d8a4e;font-size:11px;padding:2px 10px;border-radius:20px;font-family:var(--mono)';
+  } else if (accessToken) {
+    b.textContent = '✓ Google 登入模式'; b.style.cssText = 'background:#e8f0fe;color:#1a73e8;font-size:11px;padding:2px 10px;border-radius:20px;font-family:var(--mono)';
+  } else {
+    b.textContent = '⚠ 請設定 Script 網址或登入'; b.style.cssText = 'background:#fff3e0;color:#e65100;font-size:11px;padding:2px 10px;border-radius:20px;font-family:var(--mono)';
+  }
 }
 function closeAdmin() {
   adminOpen = false;
@@ -449,7 +501,10 @@ function setupDropZone() {
   fi.addEventListener('change', () => handleFiles(fi.files));
 }
 function handleFiles(list) {
-  if (!accessToken) { showToast('請先登入 Google 帳號'); return; }
+  if (!accessToken && !CONFIG.SCRIPT_URL) {
+    showToast('請先設定 Script 網址（免登入）或登入 Google');
+    return;
+  }
   Array.from(list).forEach(uploadFile);
 }
 async function uploadFile(file) {
@@ -459,20 +514,45 @@ async function uploadFile(file) {
   ul.prepend(item);
   const st = item.querySelector('.ul-status');
   try {
-    const meta = { name: file.name, parents: [CONFIG.FOLDER_ID] };
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
-    form.append('file', file);
-    const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
-      { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` }, body: form });
-    if (!r.ok) throw new Error((await r.json()).error?.message || r.statusText);
+    if (accessToken) {
+      // 方式 A：OAuth 登入上傳
+      const meta = { name: file.name, parents: [CONFIG.FOLDER_ID] };
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
+      form.append('file', file);
+      const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+        { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` }, body: form });
+      if (!r.ok) throw new Error((await r.json()).error?.message || r.statusText);
+    } else {
+      // 方式 B：Apps Script 免登入上傳（base64）
+      const base64 = await fileToBase64(file);
+      await fetch(CONFIG.SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        body: JSON.stringify({ name: file.name, mimeType: file.type, data: base64 })
+      });
+    }
     st.textContent = '✓ 完成'; st.className = 'ul-status done';
     showToast(`✓ ${file.name} 上傳完成`);
-    setTimeout(refreshFiles, 1500);
+    setTimeout(refreshFiles, 2000);
   } catch(e) {
     st.textContent = '✗ 失敗'; st.className = 'ul-status error';
     showToast(`✗ 失敗：${e.message}`);
   }
+}
+
+function fileToBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = e => res(e.target.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+function copyScript() {
+  const code = document.getElementById('script-code').textContent;
+  navigator.clipboard.writeText(code).then(() => showToast('✓ 程式碼已複製'));
 }
 
 // ── DELETE ───────────────────────────────────────
