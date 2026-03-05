@@ -627,7 +627,7 @@ async function renderPdfSlides(file, host, slideList, zone='a') {
   }
 }
 
-async async function fetchZoneB() {
+async function fetchZoneB() {
   if (!CONFIG.FOLDER_ID_B) return;
   try {
     const r = await fetch(
