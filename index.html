@@ -178,12 +178,12 @@
 
 
     /* ── SPLIT LAYOUT ── */
-    #stage { position:fixed; inset:0; display:flex; background:#000; }
+    #stage { position:fixed; inset:0; display:flex; flex-direction:column; background:#000; }
     #zone-a { position:relative; flex-shrink:0; overflow:hidden; background:#111; }
     #zone-b { position:relative; flex:1; overflow:hidden; background:#111; }
     #zone-divider {
-      width: 3px; background: rgba(255,255,255,0.12);
-      flex-shrink: 0; cursor: col-resize; z-index:50;
+      height: 3px; width: 100%; background: rgba(255,255,255,0.12);
+      flex-shrink: 0; cursor: row-resize; z-index:50;
       transition: background 0.2s;
     }
     #zone-divider:hover { background: rgba(255,255,255,0.35); }
@@ -332,7 +332,7 @@
       <div id="split-settings" style="display:none">
         <!-- Ratio slider -->
         <div class="ratio-row">
-          <label>左側比例</label>
+          <label>上方比例</label>
           <input type="range" id="inp-ratio" min="20" max="80" value="50"
             oninput="updateRatioDisplay(this.value)">
           <span id="ratio-display">50 : 50</span>
@@ -340,16 +340,16 @@
 
         <!-- Zone A config -->
         <div class="zone-cfg">
-          <div class="zone-cfg-title">▐ 左側 Zone A</div>
-          <p style="font-size:13px;color:var(--sub)">使用主要 Drive 資料夾（上方設定）</p>
+          <div class="zone-cfg-title">▬ 上方 Zone A</div>
+          <p style="font-size:13px;color:var(--sub)">使用主要 Drive 資料夾</p>
         </div>
 
         <!-- Zone B config -->
         <div class="zone-cfg" style="margin-top:10px;border-color:#3a9ad9">
-          <div class="zone-cfg-title" style="color:#3a9ad9">▐ 右側 Zone B</div>
+          <div class="zone-cfg-title" style="color:#3a9ad9">▬ 下方 Zone B</div>
           <div class="cfg-row" style="margin-top:8px">
             <span class="cfg-key">資料夾 ID B</span>
-            <input class="cfg-val" id="inp-folderid-b" type="text" placeholder="右側 Drive 資料夾 ID">
+            <input class="cfg-val" id="inp-folderid-b" type="text" placeholder="下方 Zone B Drive 資料夾 ID">
           </div>
           <div class="cfg-row">
             <span class="cfg-key">預設秒數 B</span>
@@ -367,8 +367,8 @@
       <div class="adm-label">上傳媒體 · Upload &nbsp;<span id="upload-mode-badge" class="mode-badge"></span></div>
       <div class="upload-zone-row">
         <span style="font-size:13px;color:var(--sub);font-family:var(--mono)">上傳到：</span>
-        <button class="uz-btn active" id="uz-a" onclick="setUploadZone('a')">▐ Zone A（主要）</button>
-        <button class="uz-btn" id="uz-b" onclick="setUploadZone('b')">▐ Zone B（右側）</button>
+        <button class="uz-btn active" id="uz-a" onclick="setUploadZone('a')">▬ Zone A（上方）</button>
+        <button class="uz-btn" id="uz-b" onclick="setUploadZone('b')">▬ Zone B（下方）</button>
       </div>
       <div id="drop-zone" onclick="document.getElementById('file-input').click()">
         <div class="dz-icon">📂</div>
@@ -514,10 +514,12 @@ function applyStageLayout() {
   if (CONFIG.LAYOUT_MODE === 'split') {
     body.classList.remove('layout-single');
     body.classList.add('layout-split');
-    document.getElementById('zone-a').style.width = CONFIG.LAYOUT_RATIO + '%';
+    document.getElementById('zone-a').style.height = CONFIG.LAYOUT_RATIO + '%';
+    document.getElementById('zone-a').style.width = '';
   } else {
     body.classList.remove('layout-split');
     body.classList.add('layout-single');
+    document.getElementById('zone-a').style.height = '';
     document.getElementById('zone-a').style.width = '';
   }
 }
@@ -636,8 +638,8 @@ async function renderPdfSlides(file, host, slideList, zone='a') {
   }
 
   const zoneEl = document.getElementById('zone-' + zone);
-  const zoneW = zoneEl.offsetWidth || window.innerWidth * (CONFIG.LAYOUT_RATIO||50)/100;
-  const zoneH = zoneEl.offsetHeight || window.innerHeight;
+  const zoneW = zoneEl.offsetWidth || window.innerWidth;
+  const zoneH = zoneEl.offsetHeight || window.innerHeight * (CONFIG.LAYOUT_RATIO||50)/100;
 
   for (let p = 1; p <= numPages; p++) {
     const page = await pdfDoc.getPage(p);
