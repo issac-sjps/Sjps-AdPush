@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -6,894 +5,388 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SJPS · AdPush</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=Noto+Sans+TC:wght@300;400;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
   <style>
-    /* ── RESET ─────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
-      --bg:     #090909;
-      --fg:     #f2efe8;
-      --accent: #f0a030;
-      --dim:    rgba(242,239,232,0.32);
-      --glass:  rgba(242,239,232,0.04);
-      --mono:   'IBM Plex Mono', monospace;
-      --sans:   'Noto Sans TC', sans-serif;
+      --bg: #f7f6f2; --surface: #ffffff; --border: #e0ddd6;
+      --text: #1a1917; --sub: #7a7670; --accent: #e05c1a;
+      --ok: #2d8a4e; --err: #c0392b;
+      --mono: 'DM Mono', monospace; --sans: 'Noto Sans TC', sans-serif;
+      --r: 8px;
     }
+    html, body { width:100%; height:100%; background:var(--bg); color:var(--text); font-family:var(--sans); font-size:16px; overflow:hidden; }
 
-    html, body {
-      width: 100%; height: 100%;
-      background: var(--bg);
-      color: var(--fg);
-      font-family: var(--sans);
-      overflow: hidden;
-      user-select: none;
-    }
+    /* LOADING */
+    #loading { position:fixed; inset:0; z-index:9000; background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; transition:opacity 0.5s; }
+    #loading.hide { opacity:0; pointer-events:none; }
+    .spinner { width:40px; height:40px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.85s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    #loading p { font-size:15px; color:var(--sub); letter-spacing:2px; }
 
-    /* ── LOADING ────────────────────────────────────── */
-    #loading {
-      position: fixed; inset: 0; z-index: 9000;
-      background: var(--bg);
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: 24px;
-      transition: opacity 0.5s ease;
-    }
-    #loading.hide { opacity: 0; pointer-events: none; }
+    /* SLIDESHOW */
+    #slideshow { position:fixed; inset:0; background:#111; }
+    .slide { position:absolute; inset:0; opacity:0; transition:opacity 0.8s ease; display:flex; align-items:center; justify-content:center; background:#111; }
+    .slide.active { opacity:1; }
+    .slide img { display:block; max-width:100%; max-height:100%; object-fit:contain; }
+    .slide iframe { position:absolute; inset:0; width:100%; height:100%; border:none; }
 
-    .spinner {
-      width: 36px; height: 36px;
-      border: 2px solid rgba(242,239,232,0.08);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.9s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    /* HUD */
+    #hud { position:fixed; inset:0; pointer-events:none; z-index:200; }
+    #brand { position:absolute; top:16px; left:20px; font-family:var(--mono); font-size:12px; letter-spacing:3px; color:rgba(255,255,255,0.3); text-transform:uppercase; }
+    #counter { position:absolute; bottom:22px; right:22px; font-family:var(--mono); font-size:14px; color:rgba(255,255,255,0.45); letter-spacing:2px; }
+    #progress { position:absolute; bottom:0; left:0; height:3px; background:var(--accent); width:0%; box-shadow:0 0 12px rgba(224,92,26,0.6); }
+    #dots { position:absolute; bottom:20px; left:50%; transform:translateX(-50%); display:flex; gap:8px; }
+    .dot { width:7px; height:7px; border-radius:50%; background:rgba(255,255,255,0.2); transition:background 0.3s,transform 0.3s; }
+    .dot.active { background:var(--accent); transform:scale(1.6); }
 
-    #loading p {
-      font-family: var(--mono); font-size: 11px;
-      letter-spacing: 4px; color: var(--dim);
-      text-transform: uppercase;
-    }
+    /* Hover controls */
+    #slide-controls { position:absolute; bottom:52px; left:50%; transform:translateX(-50%); display:flex; gap:12px; opacity:0; transition:opacity 0.3s; pointer-events:all; }
+    #hud:hover #slide-controls { opacity:1; }
+    .ctrl-btn { background:rgba(255,255,255,0.92); border:none; width:46px; height:46px; border-radius:50%; cursor:pointer; font-size:20px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 14px rgba(0,0,0,0.25); transition:transform 0.15s; pointer-events:all; }
+    .ctrl-btn:hover { transform:scale(1.12); }
+    #admin-trigger { position:absolute; top:0; right:0; width:80px; height:80px; pointer-events:all; cursor:pointer; }
 
-    /* ── SLIDESHOW ──────────────────────────────────── */
-    #slideshow {
-      position: fixed; inset: 0;
-      background: #000;
-    }
+    /* SETUP */
+    #setup-screen { position:fixed; inset:0; z-index:100; background:var(--bg); display:none; flex-direction:column; align-items:center; justify-content:center; gap:14px; }
+    #setup-screen.show { display:flex; }
+    .setup-logo { font-family:var(--mono); font-size:clamp(32px,7vw,84px); font-weight:300; letter-spacing:12px; color:var(--text); }
+    .setup-logo em { color:var(--accent); font-style:normal; }
+    .setup-desc { font-size:17px; color:var(--sub); }
+    .setup-hint { margin-top:24px; display:flex; gap:20px; font-size:14px; color:#aaa8a2; }
+    .setup-hint kbd { background:var(--surface); border:1.5px solid var(--border); padding:2px 10px; border-radius:4px; font-family:var(--mono); font-size:13px; }
 
-    .slide {
-      position: absolute; inset: 0;
-      opacity: 0;
-      transition: opacity 0.9s cubic-bezier(0.4,0,0.2,1);
-      display: flex; align-items: center; justify-content: center;
-      background: #000;
-    }
-    .slide.active { opacity: 1; }
+    /* ADMIN OVERLAY */
+    #admin-overlay { position:fixed; inset:0; z-index:5000; background:rgba(247,246,242,0.97); backdrop-filter:blur(20px); display:none; overflow-y:auto; }
+    #admin-overlay.open { display:block; animation:fadein 0.2s ease; }
+    @keyframes fadein { from { opacity:0; } }
+    #admin-panel { max-width:720px; margin:0 auto; padding:44px 32px 80px; }
 
-    .slide img {
-      display: block;
-      max-width: 100%; max-height: 100%;
-      width: auto; height: auto;
-      object-fit: contain;
-    }
+    .adm-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:44px; padding-bottom:20px; border-bottom:2px solid var(--border); }
+    .adm-logo { font-family:var(--mono); font-size:14px; letter-spacing:3px; color:var(--accent); font-weight:500; }
+    .adm-logo span { color:var(--sub); }
+    #btn-close { background:var(--surface); border:1.5px solid var(--border); color:var(--text); font-family:var(--mono); font-size:13px; letter-spacing:1px; padding:10px 22px; cursor:pointer; border-radius:var(--r); transition:border-color 0.2s,color 0.2s; }
+    #btn-close:hover { border-color:var(--accent); color:var(--accent); }
 
-    .slide iframe {
-      position: absolute; inset: 0;
-      width: 100%; height: 100%;
-      border: none;
-    }
+    .adm-section { margin-bottom:40px; }
+    .adm-label { font-family:var(--mono); font-size:11px; letter-spacing:4px; color:var(--sub); text-transform:uppercase; padding-bottom:12px; border-bottom:1.5px solid var(--border); margin-bottom:22px; }
 
-    /* ── HUD ────────────────────────────────────────── */
-    #hud {
-      position: fixed; inset: 0;
-      pointer-events: none;
-      z-index: 200;
-    }
+    .cfg-row { display:grid; grid-template-columns:150px 1fr; align-items:center; gap:10px; margin-bottom:14px; }
+    .cfg-key { font-family:var(--mono); font-size:13px; color:var(--sub); }
+    .cfg-val { background:var(--surface); border:1.5px solid var(--border); color:var(--text); font-family:var(--mono); font-size:13px; padding:11px 14px; border-radius:var(--r); outline:none; width:100%; transition:border-color 0.2s,box-shadow 0.2s; }
+    .cfg-val:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(224,92,26,0.1); }
 
-    /* Brand watermark */
-    #brand {
-      position: absolute; top: 18px; left: 22px;
-      font-family: var(--mono); font-size: 9px;
-      letter-spacing: 5px; color: rgba(242,239,232,0.12);
-      text-transform: uppercase;
-    }
+    .btn-primary { background:var(--accent); border:none; color:#fff; font-family:var(--mono); font-size:13px; font-weight:500; letter-spacing:1px; padding:12px 28px; cursor:pointer; border-radius:var(--r); transition:background 0.2s,transform 0.1s; }
+    .btn-primary:hover { background:#c4481a; }
+    .btn-primary:active { transform:scale(0.98); }
+    .btn-ghost { background:var(--surface); border:1.5px solid var(--border); color:var(--text); font-family:var(--mono); font-size:13px; padding:11px 22px; cursor:pointer; border-radius:var(--r); transition:border-color 0.2s,color 0.2s; text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+    .btn-ghost:hover { border-color:var(--accent); color:var(--accent); }
+    .btn-row { display:flex; gap:10px; flex-wrap:wrap; margin-top:18px; }
 
-    /* Slide counter */
-    #counter {
-      position: absolute; bottom: 22px; right: 22px;
-      font-family: var(--mono); font-size: 10px;
-      letter-spacing: 3px; color: rgba(242,239,232,0.2);
-    }
-
-    /* Progress bar */
-    #progress {
-      position: absolute; bottom: 0; left: 0;
-      height: 2px;
-      background: var(--accent);
-      box-shadow: 0 0 10px var(--accent), 0 0 20px rgba(240,160,48,0.4);
-      width: 0%;
-    }
-
-    /* Dots */
-    #dots {
-      position: absolute; bottom: 20px; left: 50%;
-      transform: translateX(-50%);
-      display: flex; gap: 7px;
-    }
-    .dot {
-      width: 5px; height: 5px; border-radius: 50%;
-      background: rgba(242,239,232,0.15);
-      transition: background 0.3s, transform 0.3s;
-    }
-    .dot.active {
-      background: var(--accent);
-      box-shadow: 0 0 6px var(--accent);
-      transform: scale(1.5);
-    }
-
-    /* Admin trigger (top-right corner hotspot) */
-    #admin-trigger {
-      position: absolute; top: 0; right: 0;
-      width: 72px; height: 72px;
-      pointer-events: all;
-      cursor: pointer;
-    }
-
-    /* ── EMPTY / SETUP STATE ────────────────────────── */
-    #setup-screen {
-      position: fixed; inset: 0; z-index: 100;
-      display: none;
-      flex-direction: column; align-items: center; justify-content: center;
-      gap: 20px;
-      background: var(--bg);
-    }
-    #setup-screen.show { display: flex; }
-
-    .setup-logo {
-      font-family: var(--mono); font-size: clamp(28px, 6vw, 72px);
-      font-weight: 300; letter-spacing: 12px;
-      text-transform: uppercase; color: var(--fg);
-    }
-    .setup-logo span { color: var(--accent); }
-
-    .setup-sub {
-      font-family: var(--mono); font-size: 11px;
-      letter-spacing: 3px; color: var(--dim);
-      text-align: center;
-    }
-
-    .setup-hint {
-      margin-top: 32px;
-      font-family: var(--mono); font-size: 10px;
-      letter-spacing: 2px; color: rgba(242,239,232,0.15);
-    }
-    .setup-hint kbd {
-      display: inline-block;
-      border: 1px solid rgba(242,239,232,0.15);
-      padding: 2px 8px; border-radius: 2px;
-      font-family: var(--mono);
-    }
-
-    /* ── ADMIN OVERLAY ──────────────────────────────── */
-    #admin-overlay {
-      position: fixed; inset: 0; z-index: 5000;
-      background: rgba(6,6,6,0.92);
-      backdrop-filter: blur(24px) saturate(0.5);
-      display: none; overflow-y: auto;
-    }
-    #admin-overlay.open {
-      display: block;
-      animation: overlayIn 0.25s ease;
-    }
-    @keyframes overlayIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-
-    #admin-panel {
-      max-width: 680px;
-      margin: 0 auto;
-      padding: 52px 36px 80px;
-    }
-
-    /* Admin header */
-    .adm-header {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 52px;
-    }
-    .adm-logo {
-      font-family: var(--mono); font-size: 10px;
-      letter-spacing: 6px; color: var(--accent);
-      text-transform: uppercase;
-    }
-    #btn-close {
-      font-family: var(--mono); font-size: 10px;
-      letter-spacing: 2px; color: var(--dim);
-      background: none;
-      border: 1px solid rgba(242,239,232,0.12);
-      padding: 8px 18px;
-      cursor: pointer;
-      transition: border-color 0.2s, color 0.2s;
-    }
-    #btn-close:hover { border-color: var(--fg); color: var(--fg); }
-
-    /* Sections */
-    .adm-section { margin-bottom: 44px; }
-
-    .adm-label {
-      font-family: var(--mono); font-size: 9px;
-      letter-spacing: 5px; color: var(--dim);
-      text-transform: uppercase;
-      padding-bottom: 14px;
-      border-bottom: 1px solid rgba(242,239,232,0.07);
-      margin-bottom: 20px;
-    }
-
-    /* Config grid */
-    .cfg-row {
-      display: grid; grid-template-columns: 130px 1fr;
-      align-items: center; gap: 10px;
-      margin-bottom: 14px;
-    }
-    .cfg-key {
-      font-family: var(--mono); font-size: 10px;
-      color: var(--dim); letter-spacing: 1px;
-    }
-    .cfg-val {
-      background: rgba(242,239,232,0.04);
-      border: 1px solid rgba(242,239,232,0.10);
-      color: var(--fg);
-      font-family: var(--mono); font-size: 11px;
-      padding: 10px 12px; outline: none; width: 100%;
-      transition: border-color 0.2s;
-    }
-    .cfg-val:focus { border-color: var(--accent); }
-
-    /* Instructions box */
-    .instruction-box {
-      background: rgba(240,160,48,0.05);
-      border: 1px solid rgba(240,160,48,0.18);
-      padding: 22px 24px;
-      font-family: var(--mono); font-size: 10px;
-      line-height: 2.0; color: rgba(242,239,232,0.6);
-      margin-top: 20px;
-    }
-    .instruction-box a { color: var(--accent); }
-    .instruction-box code {
-      background: rgba(242,239,232,0.07);
-      padding: 1px 6px; font-size: 9px;
-    }
-    .instruction-box strong { color: var(--fg); letter-spacing: 2px; }
-
-    /* Buttons */
-    .btn-primary {
-      background: var(--accent);
-      border: none; color: #000;
-      font-family: var(--mono); font-size: 11px;
-      font-weight: 500; letter-spacing: 3px;
-      text-transform: uppercase;
-      padding: 13px 30px; cursor: pointer;
-      transition: opacity 0.2s;
-      display: inline-block;
-    }
-    .btn-primary:hover { opacity: 0.85; }
-    .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
-
-    .btn-ghost {
-      background: none;
-      border: 1px solid rgba(242,239,232,0.18);
-      color: var(--fg);
-      font-family: var(--mono); font-size: 10px;
-      letter-spacing: 2px; padding: 10px 22px;
-      cursor: pointer; transition: border-color 0.2s;
-    }
-    .btn-ghost:hover { border-color: var(--fg); }
-
-    .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
-
-    /* Auth status */
-    #auth-status {
-      font-family: var(--mono); font-size: 10px;
-      color: var(--dim); margin-top: 12px; letter-spacing: 1px;
-    }
-    #auth-status.ok { color: #6ec97f; }
+    #auth-status { margin-top:12px; font-size:15px; color:var(--sub); }
+    #auth-status.ok { color:var(--ok); font-weight:500; }
 
     /* Drop zone */
-    #drop-zone {
-      border: 1px dashed rgba(242,239,232,0.14);
-      padding: 44px 24px; text-align: center;
-      cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
-    }
-    #drop-zone:hover, #drop-zone.over {
-      border-color: var(--accent);
-      background: rgba(240,160,48,0.04);
-    }
-    #drop-zone .dz-main {
-      font-family: var(--mono); font-size: 12px;
-      color: var(--dim); letter-spacing: 2px;
-      margin-bottom: 10px;
-    }
-    #drop-zone .dz-types {
-      font-family: var(--mono); font-size: 9px;
-      letter-spacing: 3px; color: rgba(242,239,232,0.18);
-    }
-    #file-input { display: none; }
+    #drop-zone { border:2px dashed var(--border); background:var(--surface); padding:48px 24px; text-align:center; cursor:pointer; border-radius:var(--r); transition:border-color 0.2s,background 0.2s; }
+    #drop-zone:hover, #drop-zone.over { border-color:var(--accent); background:#fff8f5; }
+    #drop-zone .dz-icon { font-size:38px; margin-bottom:12px; }
+    #drop-zone .dz-main { font-size:16px; color:var(--text); margin-bottom:8px; font-weight:500; }
+    #drop-zone .dz-types { font-size:13px; color:var(--sub); font-family:var(--mono); }
+    #file-input { display:none; }
 
-    /* Upload list */
-    #upload-list { margin-top: 18px; }
-    .ul-item {
-      display: flex; align-items: center; gap: 12px;
-      padding: 10px 0;
-      border-bottom: 1px solid rgba(242,239,232,0.05);
-      font-family: var(--mono); font-size: 10px;
-    }
-    .ul-name { flex: 1; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .ul-status { letter-spacing: 1px; }
-    .ul-status.uploading { color: var(--accent); }
-    .ul-status.done { color: #6ec97f; }
-    .ul-status.error { color: #e05555; }
+    #upload-list { margin-top:14px; }
+    .ul-item { display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); font-size:14px; }
+    .ul-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .ul-status { font-family:var(--mono); font-size:12px; flex-shrink:0; }
+    .ul-status.uploading { color:var(--accent); }
+    .ul-status.done { color:var(--ok); }
+    .ul-status.error { color:var(--err); }
 
-    /* Drive file list */
-    #drive-list { margin-top: 4px; }
-    .dl-item {
-      display: flex; align-items: center; gap: 12px;
-      padding: 10px 0;
-      border-bottom: 1px solid rgba(242,239,232,0.05);
-      font-family: var(--mono); font-size: 10px;
-    }
-    .dl-icon { font-size: 14px; flex-shrink: 0; }
-    .dl-name { flex: 1; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .dl-type { color: var(--dim); font-size: 9px; letter-spacing: 2px; }
+    .dl-item { display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:var(--r); background:var(--surface); border:1.5px solid var(--border); margin-bottom:8px; font-size:14px; }
+    .dl-icon { font-size:20px; flex-shrink:0; }
+    .dl-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500; }
+    .dl-type { font-family:var(--mono); font-size:11px; color:var(--sub); letter-spacing:1px; }
+    .empty-list { font-size:15px; color:var(--sub); padding:8px 0; }
 
-    .empty-list {
-      font-family: var(--mono); font-size: 10px;
-      color: var(--dim); letter-spacing: 2px; padding: 12px 0;
-    }
-
-    /* Shortcut hint bar */
-    .shortcut-bar {
-      position: fixed; bottom: 0; left: 0; right: 0;
-      padding: 14px 24px;
-      display: flex; gap: 24px;
-      font-family: var(--mono); font-size: 9px;
-      letter-spacing: 2px; color: rgba(242,239,232,0.18);
-      pointer-events: none; z-index: 5100;
-    }
-    .shortcut-bar kbd {
-      display: inline-block;
-      border: 1px solid rgba(242,239,232,0.15);
-      padding: 1px 6px; border-radius: 2px; margin-right: 4px;
-    }
-
-    /* Cursor — hide in kiosk, restore in admin */
-    body { cursor: none; }
-    #admin-overlay { cursor: auto; }
-    #admin-overlay * { cursor: auto; }
-    #admin-overlay button, #admin-overlay input, #admin-overlay #drop-zone { cursor: pointer; }
-    #admin-overlay input { cursor: text; }
+    /* Toast */
+    #toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--text); color:#fff; padding:12px 26px; border-radius:var(--r); font-size:14px; z-index:9999; transition:transform 0.3s; pointer-events:none; white-space:nowrap; }
+    #toast.show { transform:translateX(-50%) translateY(0); }
   </style>
 </head>
 <body>
 
-<!-- ── LOADING ───────────────────────────────────── -->
-<div id="loading">
-  <div class="spinner"></div>
-  <p>SJPS · ADPUSH · LOADING</p>
-</div>
-
-<!-- ── SLIDESHOW ─────────────────────────────────── -->
+<div id="loading"><div class="spinner"></div><p>載入媒體中…</p></div>
 <div id="slideshow"></div>
 
-<!-- ── HUD ───────────────────────────────────────── -->
 <div id="hud">
-  <div id="brand">SJPS · ADPUSH</div>
+  <div id="brand">SJPS · AdPush</div>
   <div id="counter"></div>
   <div id="progress"></div>
   <div id="dots"></div>
-  <div id="admin-trigger" title="Admin Panel"></div>
+  <div id="slide-controls">
+    <button class="ctrl-btn" onclick="prev()">‹</button>
+    <button class="ctrl-btn" onclick="openAdmin()">⚙</button>
+    <button class="ctrl-btn" onclick="next()">›</button>
+  </div>
+  <div id="admin-trigger"></div>
 </div>
 
-<!-- ── SETUP SCREEN ──────────────────────────────── -->
 <div id="setup-screen">
-  <div class="setup-logo">SJPS <span>·</span> AdPush</div>
-  <div class="setup-sub">數位廣告播放系統</div>
+  <div class="setup-logo">SJPS <em>·</em> AdPush</div>
+  <div class="setup-desc">數位廣告播放系統</div>
   <div class="setup-hint">
-    按 <kbd>A</kbd> 開啟管理面板 · 按 <kbd>F</kbd> 全螢幕
+    <span><kbd>A</kbd> 管理面板</span>
+    <span><kbd>F</kbd> 全螢幕</span>
+    <span><kbd>← →</kbd> 切換</span>
   </div>
 </div>
 
-<!-- ── ADMIN OVERLAY ──────────────────────────────── -->
 <div id="admin-overlay">
   <div id="admin-panel">
-
-    <!-- Header -->
     <div class="adm-header">
-      <div class="adm-logo">SJPS · AdPush Admin</div>
-      <button id="btn-close">ESC · 關閉</button>
+      <div class="adm-logo">SJPS <span>·</span> AdPush <span>/ 管理面板</span></div>
+      <button id="btn-close">✕ 關閉</button>
     </div>
 
-    <!-- Section 1: Config -->
     <div class="adm-section">
       <div class="adm-label">系統設定 · Configuration</div>
-
       <div class="cfg-row">
-        <span class="cfg-key">API KEY</span>
-        <input class="cfg-val" id="inp-apikey" type="text" placeholder="Google Drive API Key (讀取用)">
+        <span class="cfg-key">API 金鑰</span>
+        <input class="cfg-val" id="inp-apikey" type="text" placeholder="AIzaSy...（Google Drive API Key）">
       </div>
       <div class="cfg-row">
-        <span class="cfg-key">CLIENT ID</span>
-        <input class="cfg-val" id="inp-clientid" type="text" placeholder="OAuth 2.0 Client ID (上傳用)">
+        <span class="cfg-key">Client ID</span>
+        <input class="cfg-val" id="inp-clientid" type="text" placeholder="xxx.apps.googleusercontent.com">
       </div>
       <div class="cfg-row">
-        <span class="cfg-key">FOLDER ID</span>
+        <span class="cfg-key">資料夾 ID</span>
         <input class="cfg-val" id="inp-folderid" type="text" placeholder="Google Drive 資料夾 ID">
       </div>
       <div class="cfg-row">
-        <span class="cfg-key">切換秒數</span>
+        <span class="cfg-key">每張秒數</span>
         <input class="cfg-val" id="inp-duration" type="number" placeholder="8" min="1" max="300">
       </div>
-
       <div class="btn-row">
-        <button class="btn-primary" onclick="saveConfig()">儲存設定</button>
+        <button class="btn-primary" onclick="saveConfig()">💾 儲存設定</button>
         <button class="btn-ghost" onclick="refreshFiles()">↺ 重新載入</button>
-      </div>
-
-      <div class="instruction-box">
-        <strong>首次設定步驟</strong><br><br>
-        1. 前往 <a href="https://console.cloud.google.com" target="_blank">Google Cloud Console</a><br>
-        2. 建立專案 → 啟用 <code>Google Drive API</code><br>
-        3. 建立 <code>API 金鑰</code>（用於讀取/列出檔案）<br>
-        4. 建立 <code>OAuth 2.0 用戶端 ID</code>（網頁應用程式）<br>
-        &nbsp;&nbsp;&nbsp;→ 授權來源加入：<code>https://issac-sjps.github.io</code><br>
-        5. Google Drive 資料夾 → 共用 → <code>知道連結的人都可以查看</code><br>
-        6. 將資料夾 ID 貼到上方（URL 中 <code>folders/</code> 後面的部分）<br>
-        7. 儲存設定後即可上傳並播放
+        <a class="btn-ghost" href="setup-guide.html" target="_blank">📖 設定教學</a>
       </div>
     </div>
 
-    <!-- Section 2: Google Auth -->
     <div class="adm-section">
-      <div class="adm-label">Google 帳號 · 上傳授權</div>
-      <button class="btn-primary" id="btn-auth" onclick="handleAuth()">使用 Google 登入</button>
-      <div id="auth-status">尚未登入 · 登入後才能上傳檔案</div>
+      <div class="adm-label">Google 帳號授權 · 上傳功能</div>
+      <button class="btn-primary" id="btn-auth" onclick="handleAuth()">🔑 使用 Google 登入</button>
+      <div id="auth-status">尚未登入 · 登入後才能上傳檔案到 Drive</div>
     </div>
 
-    <!-- Section 3: Upload -->
     <div class="adm-section">
-      <div class="adm-label">上傳媒體 · Upload Media</div>
+      <div class="adm-label">上傳媒體 · Upload</div>
       <div id="drop-zone" onclick="document.getElementById('file-input').click()">
-        <div class="dz-main">拖曳檔案到這裡 或 點擊選擇</div>
+        <div class="dz-icon">📂</div>
+        <div class="dz-main">拖曳檔案到這裡，或點擊選擇</div>
         <div class="dz-types">PNG · JPG · GIF · PDF · PPT · PPTX · MP4</div>
       </div>
-      <input type="file" id="file-input" multiple
-        accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.ppt,.pptx,.mp4,.mov">
+      <input type="file" id="file-input" multiple accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.ppt,.pptx,.mp4,.mov">
       <div id="upload-list"></div>
     </div>
 
-    <!-- Section 4: Current files -->
     <div class="adm-section">
-      <div class="adm-label">目前媒體 · Files in Drive</div>
-      <div id="drive-list">
-        <p class="empty-list">請先完成設定並儲存</p>
-      </div>
-      <div class="btn-row" style="margin-top: 20px;">
+      <div class="adm-label">目前媒體清單 · Drive Files</div>
+      <div id="drive-list"><p class="empty-list">請先儲存設定後載入</p></div>
+      <div class="btn-row" style="margin-top:16px">
         <button class="btn-ghost" onclick="refreshFiles()">↺ 重新整理</button>
-        <button class="btn-ghost" onclick="window.open('https://drive.google.com/drive/folders/' + CONFIG.FOLDER_ID, '_blank')">
-          📁 開啟 Drive 資料夾
-        </button>
+        <button class="btn-ghost" onclick="window.open('https://drive.google.com/drive/folders/'+CONFIG.FOLDER_ID,'_blank')">📁 開啟 Drive 資料夾</button>
       </div>
     </div>
-
-  </div><!-- /admin-panel -->
-
-  <!-- Shortcut hints (inside admin) -->
-  <div class="shortcut-bar">
-    <span><kbd>ESC</kbd> 關閉</span>
-    <span><kbd>←</kbd><kbd>→</kbd> 切換</span>
-    <span><kbd>F</kbd> 全螢幕</span>
   </div>
-</div><!-- /admin-overlay -->
+</div>
 
+<div id="toast"></div>
 
-<!-- ════════════════════════════════════════════════
-     JAVASCRIPT
-════════════════════════════════════════════════ -->
 <script>
-// ── CONFIG ───────────────────────────────────────
-// 可直接在這裡填入，或透過 Admin 面板設定
-let CONFIG = {
-  FOLDER_ID:     '18_RG5qrn-8WVxyq6QwyNIW3afIMtKZGi',
-  API_KEY:       '',   // ← 填入 Google Drive API Key
-  CLIENT_ID:     '',   // ← 填入 OAuth 2.0 Client ID
-  SLIDE_DURATION: 8,   // 每張播放秒數
-  SCOPES: 'https://www.googleapis.com/auth/drive.file'
-};
+let CONFIG = { FOLDER_ID:'18_RG5qrn-8WVxyq6QwyNIW3afIMtKZGi', API_KEY:'AIzaSyDiKpm2ZZU7I2JO2XR6SPAWALvFgf0ifWU', CLIENT_ID:'488969442881-g1vrrsg5h6dbl3dirk23mm4iofsm5c36.apps.googleusercontent.com', SLIDE_DURATION:8, SCOPES:'https://www.googleapis.com/auth/drive.file' };
+let slides=[], currentIdx=0, slideTimer=null, progressRaf=null, progressStart=null;
+let adminOpen=false, tokenClient=null, accessToken=null, gapiReady=false;
 
-// ── STATE ────────────────────────────────────────
-let slides = [];
-let currentIdx = 0;
-let slideTimer = null;
-let progressStart = null;
-let progressRaf = null;
-let adminOpen = false;
-let tokenClient = null;
-let accessToken = null;
-let gapiReady = false;
-
-// ── INIT ─────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
-  loadConfig();
-  setupKeyboard();
-  setupDropZone();
-  setupAdminTrigger();
+  loadConfig(); setupKeyboard(); setupDropZone();
+  document.getElementById('admin-trigger').addEventListener('click', openAdmin);
+  document.getElementById('btn-close').addEventListener('click', closeAdmin);
 });
 
-// Called by GAPI script onload
 window.onGapiLoad = function() {
   gapi.load('client', async () => {
-    if (!CONFIG.API_KEY) {
-      hideLoading();
-      showSetup();
-      return;
-    }
+    if (!CONFIG.API_KEY) { hideLoading(); showSetup(); return; }
     try {
-      await gapi.client.init({
-        apiKey: CONFIG.API_KEY,
-        discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
-      });
-      gapiReady = true;
-      await fetchAndBuildSlides();
-    } catch(e) {
-      console.error('GAPI init error:', e);
-      hideLoading();
-      showSetup();
-    }
+      await gapi.client.init({ apiKey:CONFIG.API_KEY, discoveryDocs:['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'] });
+      gapiReady=true; await fetchAndBuildSlides();
+    } catch(e) { console.error(e); hideLoading(); showSetup(); }
   });
 };
 
-// ── CONFIG PERSISTENCE ───────────────────────────
 function loadConfig() {
-  try {
-    const saved = localStorage.getItem('sjps_cfg');
-    if (saved) CONFIG = { ...CONFIG, ...JSON.parse(saved) };
-  } catch(e) {}
-  syncAdminInputs();
+  try { const s=localStorage.getItem('sjps_cfg'); if(s) CONFIG={...CONFIG,...JSON.parse(s)}; } catch(e){}
+  syncInputs();
 }
-
-function syncAdminInputs() {
-  document.getElementById('inp-apikey').value    = CONFIG.API_KEY || '';
-  document.getElementById('inp-clientid').value  = CONFIG.CLIENT_ID || '';
-  document.getElementById('inp-folderid').value  = CONFIG.FOLDER_ID || '';
-  document.getElementById('inp-duration').value  = CONFIG.SLIDE_DURATION || 8;
+function syncInputs() {
+  document.getElementById('inp-apikey').value   = CONFIG.API_KEY||'';
+  document.getElementById('inp-clientid').value = CONFIG.CLIENT_ID||'';
+  document.getElementById('inp-folderid').value = CONFIG.FOLDER_ID||'';
+  document.getElementById('inp-duration').value = CONFIG.SLIDE_DURATION||8;
 }
-
 function saveConfig() {
   CONFIG.API_KEY        = document.getElementById('inp-apikey').value.trim();
   CONFIG.CLIENT_ID      = document.getElementById('inp-clientid').value.trim();
   CONFIG.FOLDER_ID      = document.getElementById('inp-folderid').value.trim();
-  CONFIG.SLIDE_DURATION = parseInt(document.getElementById('inp-duration').value) || 8;
+  CONFIG.SLIDE_DURATION = parseInt(document.getElementById('inp-duration').value)||8;
   localStorage.setItem('sjps_cfg', JSON.stringify(CONFIG));
-  refreshFiles();
+  showToast('✓ 設定已儲存'); refreshFiles();
 }
 
-// ── GOOGLE DRIVE API ─────────────────────────────
 async function fetchAndBuildSlides() {
-  if (!CONFIG.API_KEY || !CONFIG.FOLDER_ID) { hideLoading(); showSetup(); return; }
-
+  if (!CONFIG.API_KEY||!CONFIG.FOLDER_ID) { hideLoading(); showSetup(); return; }
   try {
-    const res = await fetch(
-      `https://www.googleapis.com/drive/v3/files` +
-      `?q=%27${CONFIG.FOLDER_ID}%27+in+parents+and+trashed%3Dfalse` +
-      `&fields=files(id,name,mimeType)` +
-      `&orderBy=name` +
-      `&pageSize=100` +
-      `&key=${CONFIG.API_KEY}`
-    );
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-    const data = await res.json();
-    const all = data.files || [];
-
-    // Filter supported types
-    slides = all.filter(f => {
-      const m = f.mimeType || '';
-      return m.startsWith('image/') || m === 'application/pdf' ||
-             m.includes('presentationml') || m.includes('powerpoint') ||
-             m.startsWith('video/');
-    });
-
-    updateDriveList(all);
-    hideLoading();
-
-    if (slides.length === 0) { showSetup(); return; }
-
-    buildSlideEls();
-    startSlideshow();
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=%27${CONFIG.FOLDER_ID}%27+in+parents+and+trashed%3Dfalse&fields=files(id,name,mimeType)&orderBy=name&pageSize=100&key=${CONFIG.API_KEY}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+    const data = await r.json();
+    const all = data.files||[];
+    slides = all.filter(f=>{ const m=f.mimeType||''; return m.startsWith('image/')||m==='application/pdf'||m.includes('presentationml')||m.includes('powerpoint')||m.startsWith('video/'); });
+    updateDriveList(all); hideLoading();
+    if (!slides.length) { showSetup(); return; }
+    buildSlideEls(); startSlideshow();
     document.getElementById('setup-screen').classList.remove('show');
-
   } catch(e) {
-    console.error('Drive fetch error:', e);
-    hideLoading();
-    showSetup();
-    document.getElementById('drive-list').innerHTML =
-      `<p class="empty-list" style="color:#e05555;">⚠ 無法讀取：${e.message}</p>`;
+    console.error(e); hideLoading(); showSetup();
+    document.getElementById('drive-list').innerHTML=`<p class="empty-list" style="color:var(--err)">⚠ 無法讀取：${e.message}<br>請確認 API 金鑰正確，且資料夾已設為「公開」</p>`;
   }
 }
 
 async function refreshFiles() {
-  clearTimeout(slideTimer);
-  cancelAnimationFrame(progressRaf);
-  document.getElementById('slideshow').innerHTML = '';
-  document.getElementById('dots').innerHTML = '';
-  slides = []; currentIdx = 0;
-  document.getElementById('loading').classList.remove('hide');
-
-  // Re-init GAPI if key changed
-  if (CONFIG.API_KEY && !gapiReady) {
-    await gapi.client.init({
-      apiKey: CONFIG.API_KEY,
-      discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
-    });
-    gapiReady = true;
-  }
+  clearTimeout(slideTimer); cancelAnimationFrame(progressRaf);
+  document.getElementById('slideshow').innerHTML=''; document.getElementById('dots').innerHTML='';
+  slides=[]; currentIdx=0;
+  const l=document.getElementById('loading'); l.style.display='flex'; l.classList.remove('hide');
+  if (CONFIG.API_KEY&&!gapiReady) { try { await gapi.client.init({apiKey:CONFIG.API_KEY,discoveryDocs:['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']}); gapiReady=true; } catch(e){} }
   await fetchAndBuildSlides();
 }
 
-// ── SLIDE BUILDING ───────────────────────────────
-function getEmbed(file) {
-  const m = file.mimeType || '';
-  if (m.startsWith('image/'))
-    return { tag: 'img', src: `https://drive.google.com/uc?export=view&id=${file.id}` };
-  return { tag: 'iframe', src: `https://drive.google.com/file/d/${file.id}/preview` };
-}
-
 function buildSlideEls() {
-  const host = document.getElementById('slideshow');
-  host.innerHTML = '';
-
-  slides.forEach((file, i) => {
-    const div = document.createElement('div');
-    div.className = 'slide';
-    div.dataset.i = i;
-
-    const embed = getEmbed(file);
-    if (embed.tag === 'img') {
-      const img = document.createElement('img');
-      img.src = embed.src;
-      img.alt = file.name;
+  const host=document.getElementById('slideshow'); host.innerHTML='';
+  slides.forEach((file,i)=>{
+    const div=document.createElement('div'); div.className='slide';
+    const m=file.mimeType||'';
+    if (m.startsWith('image/')) {
+      const img=document.createElement('img');
+      img.src=`https://drive.google.com/uc?export=view&id=${file.id}`; img.alt=file.name;
       div.appendChild(img);
     } else {
-      const fr = document.createElement('iframe');
-      fr.src = embed.src;
-      fr.setAttribute('allowfullscreen', '');
-      fr.setAttribute('allow', 'autoplay');
-      div.appendChild(fr);
+      const fr=document.createElement('iframe');
+      fr.src=`https://drive.google.com/file/d/${file.id}/preview`;
+      fr.setAttribute('allowfullscreen',''); fr.setAttribute('allow','autoplay'); div.appendChild(fr);
     }
     host.appendChild(div);
   });
-
   buildDots();
 }
-
 function buildDots() {
-  const el = document.getElementById('dots');
-  el.innerHTML = '';
-  if (slides.length <= 1) return;
-  const n = Math.min(slides.length, 24);
-  for (let i = 0; i < n; i++) {
-    const d = document.createElement('div');
-    d.className = 'dot';
-    el.appendChild(d);
-  }
+  const el=document.getElementById('dots'); el.innerHTML='';
+  if (slides.length<=1) return;
+  for (let i=0;i<Math.min(slides.length,30);i++) { const d=document.createElement('div'); d.className='dot'; el.appendChild(d); }
 }
 
-// ── SLIDESHOW LOGIC ──────────────────────────────
-function startSlideshow() {
-  goTo(0);
-}
-
+function startSlideshow() { goTo(0); }
 function goTo(idx) {
-  if (slides.length === 0) return;
-  idx = ((idx % slides.length) + slides.length) % slides.length;
-  currentIdx = idx;
-
-  document.querySelectorAll('.slide').forEach((s, i) => s.classList.toggle('active', i === idx));
-  document.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i === idx));
-
-  const n = slides.length;
-  document.getElementById('counter').textContent =
-    n > 1 ? `${String(idx+1).padStart(2,'0')} / ${String(n).padStart(2,'0')}` : '';
-
+  if (!slides.length) return;
+  idx=((idx%slides.length)+slides.length)%slides.length; currentIdx=idx;
+  document.querySelectorAll('.slide').forEach((s,i)=>s.classList.toggle('active',i===idx));
+  document.querySelectorAll('.dot').forEach((d,i)=>d.classList.toggle('active',i===idx));
+  document.getElementById('counter').textContent=slides.length>1?`${String(idx+1).padStart(2,'0')} / ${String(slides.length).padStart(2,'0')}`:'';
   scheduleNext();
 }
-
 function scheduleNext() {
-  clearTimeout(slideTimer);
-  cancelAnimationFrame(progressRaf);
-
-  if (slides.length <= 1) {
-    document.getElementById('progress').style.width = '0%';
-    return;
-  }
-
-  const dur = (CONFIG.SLIDE_DURATION || 8) * 1000;
-  const bar = document.getElementById('progress');
-  bar.style.transition = 'none';
-  bar.style.width = '0%';
-
-  progressStart = performance.now();
-  function tick(now) {
-    const pct = Math.min((now - progressStart) / dur * 100, 100);
-    bar.style.width = pct + '%';
-    if (pct < 100) progressRaf = requestAnimationFrame(tick);
-  }
+  clearTimeout(slideTimer); cancelAnimationFrame(progressRaf);
+  if (slides.length<=1) { document.getElementById('progress').style.width='0%'; return; }
+  const dur=(CONFIG.SLIDE_DURATION||8)*1000;
+  const bar=document.getElementById('progress'); bar.style.transition='none'; bar.style.width='0%';
+  progressStart=performance.now();
+  function tick(now) { bar.style.width=Math.min((now-progressStart)/dur*100,100)+'%'; if((now-progressStart)<dur) progressRaf=requestAnimationFrame(tick); }
   requestAnimationFrame(tick);
-
-  slideTimer = setTimeout(() => goTo(currentIdx + 1), dur);
+  slideTimer=setTimeout(()=>goTo(currentIdx+1),dur);
 }
+function next() { goTo(currentIdx+1); }
+function prev() { goTo(currentIdx-1); }
 
-function next() { goTo(currentIdx + 1); }
-function prev() { goTo(currentIdx - 1); }
-
-// ── KEYBOARD ─────────────────────────────────────
 function setupKeyboard() {
-  document.addEventListener('keydown', e => {
-    if (adminOpen) {
-      if (e.key === 'Escape') closeAdmin();
-      return;
-    }
-    switch(e.key) {
-      case 'ArrowRight': case ' ': next(); break;
-      case 'ArrowLeft':            prev(); break;
-      case 'a': case 'A':          openAdmin(); break;
-      case 'f': case 'F':          toggleFS(); break;
-    }
+  document.addEventListener('keydown', e=>{
+    if (adminOpen) { if(e.key==='Escape') closeAdmin(); return; }
+    if (['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) return;
+    if (e.key==='ArrowRight'||e.key===' ') next();
+    else if (e.key==='ArrowLeft') prev();
+    else if (e.key==='a'||e.key==='A') openAdmin();
+    else if (e.key==='f'||e.key==='F') toggleFS();
   });
-
-  document.getElementById('slideshow').addEventListener('click', e => {
-    if (!adminOpen) next();
-  });
+  document.getElementById('slideshow').addEventListener('click',()=>{ if(!adminOpen) next(); });
 }
+function toggleFS() { if(!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); }
 
-function setupAdminTrigger() {
-  document.getElementById('admin-trigger').addEventListener('click', openAdmin);
-}
+function openAdmin() { adminOpen=true; clearTimeout(slideTimer); cancelAnimationFrame(progressRaf); document.getElementById('admin-overlay').classList.add('open'); }
+function closeAdmin() { adminOpen=false; document.getElementById('admin-overlay').classList.remove('open'); if(slides.length>0) scheduleNext(); }
 
-function toggleFS() {
-  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-  else document.exitFullscreen();
-}
-
-// ── ADMIN ────────────────────────────────────────
-function openAdmin() {
-  adminOpen = true;
-  clearTimeout(slideTimer);
-  cancelAnimationFrame(progressRaf);
-  document.getElementById('admin-overlay').classList.add('open');
-}
-
-function closeAdmin() {
-  adminOpen = false;
-  document.getElementById('admin-overlay').classList.remove('open');
-  if (slides.length > 0) scheduleNext();
-}
-
-document.getElementById('btn-close').addEventListener('click', closeAdmin);
-
-// ── AUTH ─────────────────────────────────────────
 function handleAuth() {
   if (accessToken) {
-    accessToken = null;
-    document.getElementById('btn-auth').textContent = '使用 Google 登入';
-    const st = document.getElementById('auth-status');
-    st.textContent = '已登出'; st.className = '';
-    return;
+    accessToken=null; document.getElementById('btn-auth').textContent='🔑 使用 Google 登入';
+    const s=document.getElementById('auth-status'); s.textContent='已登出'; s.className=''; return;
   }
-  if (!CONFIG.CLIENT_ID) {
-    alert('請先在設定中填入 OAuth Client ID');
-    return;
-  }
+  if (!CONFIG.CLIENT_ID) { showToast('請先填入 OAuth Client ID'); return; }
   if (!tokenClient) {
-    tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: CONFIG.CLIENT_ID,
-      scope: CONFIG.SCOPES,
-      callback: resp => {
-        if (resp.error) { console.error(resp); return; }
-        accessToken = resp.access_token;
-        document.getElementById('btn-auth').textContent = '登出';
-        const st = document.getElementById('auth-status');
-        st.textContent = '✓ 已登入 · 可以上傳檔案';
-        st.className = 'ok';
-      }
-    });
+    tokenClient=google.accounts.oauth2.initTokenClient({ client_id:CONFIG.CLIENT_ID, scope:CONFIG.SCOPES, callback:r=>{
+      if(r.error){console.error(r);return;}
+      accessToken=r.access_token; document.getElementById('btn-auth').textContent='🔓 登出 Google';
+      const s=document.getElementById('auth-status'); s.textContent='✓ 已登入，可以上傳檔案'; s.className='ok';
+    }});
   }
   tokenClient.requestAccessToken();
 }
 
-// ── DROP ZONE ────────────────────────────────────
 function setupDropZone() {
-  const dz = document.getElementById('drop-zone');
-  const fi = document.getElementById('file-input');
-
-  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
-  dz.addEventListener('dragleave', () => dz.classList.remove('over'));
-  dz.addEventListener('drop', e => {
-    e.preventDefault();
-    dz.classList.remove('over');
-    handleFiles(e.dataTransfer.files);
-  });
-  fi.addEventListener('change', () => handleFiles(fi.files));
+  const dz=document.getElementById('drop-zone'), fi=document.getElementById('file-input');
+  dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
+  dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+  dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');handleFiles(e.dataTransfer.files);});
+  fi.addEventListener('change',()=>handleFiles(fi.files));
 }
-
-function handleFiles(fileList) {
-  if (!accessToken) { alert('請先登入 Google 帳號'); return; }
-  Array.from(fileList).forEach(uploadFile);
-}
-
+function handleFiles(list) { if(!accessToken){showToast('請先登入 Google 帳號');return;} Array.from(list).forEach(uploadFile); }
 async function uploadFile(file) {
-  const list = document.getElementById('upload-list');
-  const item = document.createElement('div');
-  item.className = 'ul-item';
-  item.innerHTML = `<span class="ul-name">${file.name}</span><span class="ul-status uploading">上傳中...</span>`;
-  list.prepend(item);
-  const st = item.querySelector('.ul-status');
-
+  const ul=document.getElementById('upload-list');
+  const item=document.createElement('div'); item.className='ul-item';
+  item.innerHTML=`<span class="ul-name">${file.name}</span><span class="ul-status uploading">上傳中…</span>`;
+  ul.prepend(item); const st=item.querySelector('.ul-status');
   try {
-    const meta = { name: file.name, parents: [CONFIG.FOLDER_ID] };
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
-    form.append('file', file);
-
-    const res = await fetch(
-      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
-      { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` }, body: form }
-    );
-    if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || res.statusText); }
-
-    st.textContent = '✓ 完成'; st.className = 'ul-status done';
-    setTimeout(() => refreshFiles(), 1500);
-
-  } catch(e) {
-    st.textContent = '✗ 失敗'; st.className = 'ul-status error';
-    console.error('Upload error:', e);
-    alert(`上傳失敗：${e.message}`);
-  }
+    const meta={name:file.name,parents:[CONFIG.FOLDER_ID]};
+    const form=new FormData();
+    form.append('metadata',new Blob([JSON.stringify(meta)],{type:'application/json'}));
+    form.append('file',file);
+    const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+      {method:'POST',headers:{Authorization:`Bearer ${accessToken}`},body:form});
+    if(!r.ok) throw new Error((await r.json()).error?.message||r.statusText);
+    st.textContent='✓ 完成'; st.className='ul-status done'; showToast(`✓ ${file.name} 上傳完成`);
+    setTimeout(refreshFiles,1500);
+  } catch(e) { st.textContent='✗ 失敗'; st.className='ul-status error'; showToast(`✗ 失敗：${e.message}`); }
 }
 
-// ── DRIVE FILE LIST (admin) ──────────────────────
 function updateDriveList(files) {
-  const el = document.getElementById('drive-list');
-  if (!files.length) {
-    el.innerHTML = '<p class="empty-list">資料夾內尚無檔案</p>';
-    return;
-  }
-  const iconMap = { 'image/': '🖼️', 'pdf': '📄', 'presentation': '📊', 'powerpoint': '📊', 'video/': '🎬' };
-  function icon(mime) {
-    for (const [k,v] of Object.entries(iconMap)) if (mime.includes(k)) return v;
-    return '📁';
-  }
-  el.innerHTML = files.map(f => `
-    <div class="dl-item">
-      <span class="dl-icon">${icon(f.mimeType)}</span>
-      <span class="dl-name">${f.name}</span>
-      <span class="dl-type">${(f.mimeType||'').split('/').pop().toUpperCase()}</span>
-    </div>
-  `).join('');
+  const el=document.getElementById('drive-list');
+  if (!files.length) { el.innerHTML='<p class="empty-list">資料夾內尚無媒體檔案</p>'; return; }
+  const icon=m=>{ if(m.startsWith('image/'))return'🖼️'; if(m.includes('pdf'))return'📄'; if(m.includes('presentation')||m.includes('powerpoint'))return'📊'; if(m.startsWith('video/'))return'🎬'; return'📁'; };
+  el.innerHTML=files.map(f=>`<div class="dl-item"><span class="dl-icon">${icon(f.mimeType)}</span><span class="dl-name">${f.name}</span><span class="dl-type">${(f.mimeType||'').split('/').pop().toUpperCase()}</span></div>`).join('');
 }
 
-// ── HELPERS ──────────────────────────────────────
-function hideLoading() {
-  const el = document.getElementById('loading');
-  el.classList.add('hide');
-  setTimeout(() => el.style.display = 'none', 500);
-}
-
-function showSetup() {
-  document.getElementById('setup-screen').classList.add('show');
-}
+function hideLoading() { const el=document.getElementById('loading'); el.classList.add('hide'); setTimeout(()=>el.style.display='none',500); }
+function showSetup() { document.getElementById('setup-screen').classList.add('show'); }
+function showToast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2800); }
 </script>
 
-<!-- Google Identity Services (OAuth) -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<!-- Google API (Drive API) — calls onGapiLoad when ready -->
 <script src="https://apis.google.com/js/api.js?onload=onGapiLoad" async defer></script>
-
 </body>
 </html>
