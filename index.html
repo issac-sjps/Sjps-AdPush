@@ -299,6 +299,42 @@
     .ft-btn.active { background: var(--accent); color: #fff; }
     #zone-b .ft-btn.active { background: #3a9ad9; }
 
+
+    /* ── MUSIC PLAYER ── */
+    #music-bar {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 250;
+      height: 44px;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid rgba(255,255,255,0.08);
+      display: flex; align-items: center; gap: 12px;
+      padding: 0 16px;
+      transition: opacity 0.5s, transform 0.5s;
+    }
+    #music-bar.hidden { opacity:0; pointer-events:none; transform: translateY(44px); }
+    #music-bar.no-music { display: none; }
+    .mb-icon { font-size: 16px; flex-shrink:0; }
+    #mb-title {
+      flex: 1; font-family: var(--mono); font-size: 11px;
+      color: rgba(255,255,255,0.55); letter-spacing: 1px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .mb-btn {
+      background: none; border: none; color: rgba(255,255,255,0.7);
+      font-size: 18px; cursor: pointer; padding: 4px 6px;
+      transition: color 0.2s;
+      line-height: 1;
+    }
+    .mb-btn:hover { color: #fff; }
+    #mb-vol {
+      width: 70px; accent-color: var(--accent);
+      cursor: pointer;
+    }
+    #yt-player-container {
+      position: fixed; left: -9999px; top: -9999px;
+      width: 1px; height: 1px; pointer-events: none;
+    }
+
     /* Toast */
     #toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--text); color:#fff; padding:12px 26px; border-radius:var(--r); font-size:14px; z-index:9999; transition:transform 0.3s; pointer-events:none; white-space:nowrap; }
     #toast.show { transform:translateX(-50%) translateY(0); }
@@ -431,6 +467,38 @@
       </div>
     </div>
 
+    <!-- ── MUSIC SECTION ── -->
+    <div class="adm-section">
+      <div class="adm-label">背景音樂 · Music</div>
+      <div class="cfg-row">
+        <span class="cfg-key">YouTube 網址</span>
+        <input class="cfg-val" id="inp-music-url" type="text"
+          placeholder="https://www.youtube.com/watch?v=..."
+          style="font-size:13px">
+      </div>
+      <div class="cfg-row">
+        <span class="cfg-key">預設音量</span>
+        <input class="cfg-val" id="inp-music-vol" type="number"
+          min="0" max="100" value="30" style="width:80px"> %
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
+        <label style="font-size:13px;color:var(--sub);display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="inp-music-loop" checked> 循環播放
+        </label>
+        <label style="font-size:13px;color:var(--sub);display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="inp-music-autoplay" checked> 自動播放
+        </label>
+      </div>
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn-primary" onclick="saveMusic()">🎵 套用音樂</button>
+        <button class="btn-ghost"   onclick="stopMusic()">⏹ 停止音樂</button>
+      </div>
+      <p style="font-size:12px;color:var(--sub);margin-top:10px">
+        貼上 YouTube 網址即可背景播音樂，影像隱藏只播聲音。<br>
+        目前：<span id="music-status-label" style="color:var(--accent)">未設定</span>
+      </p>
+    </div>
+
     <div class="adm-section">
       <div class="adm-label">上傳媒體 · Upload &nbsp;<span id="upload-mode-badge" class="mode-badge"></span></div>
       <div class="upload-zone-row">
@@ -474,6 +542,18 @@
 
 <div id="toast"></div>
 
+<!-- YouTube hidden player -->
+<div id="yt-player-container"><div id="yt-player"></div></div>
+
+<!-- Music bar -->
+<div id="music-bar" class="no-music">
+  <span class="mb-icon">🎵</span>
+  <span id="mb-title">載入中…</span>
+  <button class="mb-btn" id="mb-playpause" onclick="musicToggle()" title="播放/暫停">⏸</button>
+  <input type="range" id="mb-vol" min="0" max="100" value="30" oninput="musicVolume(this.value)" title="音量">
+  <button class="mb-btn" onclick="hideMusicBar()" title="隱藏音樂列">✕</button>
+</div>
+
 <script>
 let CONFIG = {
   FOLDER_ID:      '18_RG5qrn-8WVxyq6QwyNIW3afIMtKZGi',
@@ -485,7 +565,11 @@ let CONFIG = {
   LAYOUT_MODE:    'single',     // 'single' | 'split'
   LAYOUT_RATIO:   50,           // 左側百分比
   SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxGqwoNj86h0w56otayYe1a36d6ibWlTx2_WTLmvI68DxgaIq2iXK0eEMGs_fcMJpBcnA/exec',
-  SCOPES: 'https://www.googleapis.com/auth/drive'
+  SCOPES: 'https://www.googleapis.com/auth/drive',
+  MUSIC_URL:      'https://www.youtube.com/watch?v=9jVykkV6tvQ',
+  MUSIC_VOL:      30,
+  MUSIC_LOOP:     true,
+  MUSIC_AUTOPLAY: true
 };
 
 let allFiles = [];   // Zone A 檔案
@@ -553,6 +637,12 @@ function syncInputs() {
   const ri = document.getElementById('inp-ratio'); if(ri) ri.value = CONFIG.LAYOUT_RATIO||50;
   updateRatioDisplay(CONFIG.LAYOUT_RATIO||50);
   setLayoutMode(CONFIG.LAYOUT_MODE||'single', false);
+  // Music
+  const mu = document.getElementById('inp-music-url'); if(mu) mu.value = CONFIG.MUSIC_URL||'';
+  const mv = document.getElementById('inp-music-vol'); if(mv) mv.value = CONFIG.MUSIC_VOL||30;
+  const ml = document.getElementById('inp-music-loop'); if(ml) ml.checked = CONFIG.MUSIC_LOOP !== false;
+  const ma = document.getElementById('inp-music-autoplay'); if(ma) ma.checked = CONFIG.MUSIC_AUTOPLAY !== false;
+  updateMusicStatusLabel();
 }
 function saveConfig() {
   CONFIG.API_KEY        = document.getElementById('inp-apikey').value.trim();
@@ -692,6 +782,7 @@ async function fetchAndBuildSlides() {
 
     startSlideshow();
     document.getElementById('setup-screen').classList.remove('show');
+    initMusic();
 
   } catch(e) {
     console.error(e); hideLoading(); showSetup();
@@ -1040,6 +1131,131 @@ document.addEventListener('fullscreenchange', () => {
   if (btn) btn.textContent = document.fullscreenElement ? '⊠' : '⛶';
 });
 
+// ── MUSIC ────────────────────────────────────────
+let ytPlayer = null, ytReady = false, musicLoaded = false;
+
+function extractYTid(url) {
+  if (!url) return null;
+  const m = url.match(/(?:v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+function saveMusic() {
+  const url  = document.getElementById('inp-music-url').value.trim();
+  const vol  = parseInt(document.getElementById('inp-music-vol').value) || 30;
+  const loop = document.getElementById('inp-music-loop').checked;
+  const auto = document.getElementById('inp-music-autoplay').checked;
+  if (url && !extractYTid(url)) { showToast('⚠ 無法識別 YouTube 網址'); return; }
+  CONFIG.MUSIC_URL      = url;
+  CONFIG.MUSIC_VOL      = vol;
+  CONFIG.MUSIC_LOOP     = loop;
+  CONFIG.MUSIC_AUTOPLAY = auto;
+  try { localStorage.setItem('sjps_cfg', JSON.stringify(CONFIG)); } catch(e) {}
+  document.getElementById('mb-vol').value = vol;
+  updateMusicStatusLabel();
+  if (url) loadMusic(url, vol, loop, auto);
+  else     stopMusic();
+  showToast('✓ 音樂設定已儲存');
+}
+
+function updateMusicStatusLabel() {
+  const el = document.getElementById('music-status-label');
+  if (!el) return;
+  if (CONFIG.MUSIC_URL) {
+    const id = extractYTid(CONFIG.MUSIC_URL);
+    el.textContent = id ? '已設定（ID: ' + id + '）' : CONFIG.MUSIC_URL.slice(0,30) + '…';
+  } else {
+    el.textContent = '未設定';
+  }
+}
+
+function loadMusic(url, vol, loop, autoplay) {
+  const videoId = extractYTid(url);
+  if (!videoId) return;
+  const bar = document.getElementById('music-bar');
+  bar.classList.remove('no-music');
+  document.getElementById('mb-title').textContent = '載入中…';
+  if (!ytReady) {
+    // load YT IFrame API
+    const tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(tag);
+    window.onYouTubeIframeAPIReady = () => {
+      ytReady = true;
+      createYTPlayer(videoId, vol, loop, autoplay);
+    };
+  } else if (ytPlayer) {
+    ytPlayer.loadVideoById(videoId);
+    ytPlayer.setVolume(vol);
+  } else {
+    createYTPlayer(videoId, vol, loop, autoplay);
+  }
+}
+
+function createYTPlayer(videoId, vol, loop, autoplay) {
+  ytPlayer = new YT.Player('yt-player', {
+    height: '1', width: '1',
+    videoId: videoId,
+    playerVars: {
+      autoplay: autoplay ? 1 : 0,
+      loop:     loop ? 1 : 0,
+      playlist: videoId,   // needed for loop
+      controls: 0,
+      disablekb: 1,
+      fs: 0,
+      modestbranding: 1
+    },
+    events: {
+      onReady: (e) => {
+        e.target.setVolume(vol);
+        if (autoplay) e.target.playVideo();
+        musicLoaded = true;
+        // try to get title
+        document.getElementById('mb-title').textContent = '🎵 背景音樂';
+      },
+      onStateChange: (e) => {
+        const btn = document.getElementById('mb-playpause');
+        if (e.data === YT.PlayerState.PLAYING) { if(btn) btn.textContent = '⏸'; }
+        else if (e.data === YT.PlayerState.PAUSED) { if(btn) btn.textContent = '▶'; }
+        else if (e.data === YT.PlayerState.ENDED && CONFIG.MUSIC_LOOP) {
+          e.target.playVideo(); // manual loop fallback
+        }
+      }
+    }
+  });
+}
+
+function musicToggle() {
+  if (!ytPlayer) return;
+  const state = ytPlayer.getPlayerState();
+  if (state === YT.PlayerState.PLAYING) ytPlayer.pauseVideo();
+  else ytPlayer.playVideo();
+}
+
+function musicVolume(val) {
+  if (ytPlayer) ytPlayer.setVolume(parseInt(val));
+}
+
+function stopMusic() {
+  if (ytPlayer) { ytPlayer.stopVideo(); ytPlayer.destroy(); ytPlayer = null; }
+  musicLoaded = false;
+  document.getElementById('music-bar').classList.add('no-music');
+  CONFIG.MUSIC_URL = '';
+  try { localStorage.setItem('sjps_cfg', JSON.stringify(CONFIG)); } catch(e) {}
+  updateMusicStatusLabel();
+}
+
+function hideMusicBar() {
+  document.getElementById('music-bar').classList.add('hidden');
+}
+
+// auto-start music on page load
+function initMusic() {
+  if (CONFIG.MUSIC_URL && CONFIG.MUSIC_AUTOPLAY) {
+    loadMusic(CONFIG.MUSIC_URL, CONFIG.MUSIC_VOL, CONFIG.MUSIC_LOOP, true);
+  }
+}
+
 // ── AUTO-HIDE corner buttons ──────────────────────
 let hideTimer = null;
 function showCornerBtns() {
@@ -1065,6 +1281,8 @@ window.addEventListener('DOMContentLoaded', () => {
 function openAdmin() {
   adminOpen = true;
   clearTimeout(slideTimer); cancelAnimationFrame(progressRaf);
+  // show music bar if hidden
+  document.getElementById('music-bar').classList.remove('hidden');
   document.getElementById('admin-overlay').classList.add('open');
   updateDriveList(allFiles);
   updateDriveListB(allFilesB);
