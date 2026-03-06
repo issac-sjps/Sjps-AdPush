@@ -774,18 +774,26 @@ async function renderPdfSlides(file, host, slideList, zone='a') {
 
   for (let p = 1; p <= numPages; p++) {
     const page = await pdfDoc.getPage(p);
-    const dpr = Math.min(window.devicePixelRatio || 1, 3); // max 3x for performance
+    const dpr = window.devicePixelRatio || 1;
     const vp = page.getViewport({ scale: 1 });
-    const scale = Math.min(zoneW / vp.width, zoneH / vp.height) * 0.96;
-    // 乘以 dpr 讓高解析度螢幕也清晰
-    const viewport = page.getViewport({ scale: scale * dpr });
+    // 用 zone 實際像素尺寸計算 scale，再乘 dpr 確保清晰
+    const zoneWpx = zoneW * dpr;
+    const zoneHpx = zoneH * dpr;
+    const scale = Math.min(zoneWpx / vp.width, zoneHpx / vp.height);
+    const viewport = page.getViewport({ scale });
     const canvas = document.createElement('canvas');
-    canvas.width  = viewport.width;
-    canvas.height = viewport.height;
-    // CSS 尺寸維持原本大小，實際像素是 dpr 倍
-    canvas.style.width  = (viewport.width  / dpr) + 'px';
-    canvas.style.height = (viewport.height / dpr) + 'px';
-    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    canvas.width  = Math.floor(viewport.width);
+    canvas.height = Math.floor(viewport.height);
+    // CSS 顯示為 zone 實際大小（瀏覽器自動縮放），像素密度高所以清晰
+    canvas.style.width  = zoneW + 'px';
+    canvas.style.height = zoneH + 'px';
+    canvas.style.maxWidth  = '100%';
+    canvas.style.maxHeight = '100%';
+    // 用 2d context 時啟用高品質縮放
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    await page.render({ canvasContext: ctx, viewport }).promise;
     const div = document.createElement('div'); div.className = 'zone-slide';
     div.appendChild(canvas); host.appendChild(div);
     slideList.push({ id: file.id + '_p' + p, name: file.name + ' p' + p,
