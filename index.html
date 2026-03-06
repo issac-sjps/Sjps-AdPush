@@ -253,6 +253,52 @@
     .zone-badge-a { background:#fff3ee; color:var(--accent); }
     .zone-badge-b { background:#e8f4fd; color:#3a9ad9; }
 
+
+    /* ── FIT MODE per zone ── */
+    /* 預設 contain（自動） */
+    .zone-slide img,
+    .zone-slide canvas { transition: none; }
+
+    /* 填滿寬度：左右貼齊，上下可能留黑邊 */
+    #zone-a.fit-width .zone-slide img,
+    #zone-a.fit-width .zone-slide canvas,
+    #zone-b.fit-width .zone-slide img,
+    #zone-b.fit-width .zone-slide canvas {
+      width: 100% !important; height: auto !important; max-width:none; max-height:none;
+    }
+    /* 填滿高度：上下貼齊，左右可能留黑邊 */
+    #zone-a.fit-height .zone-slide img,
+    #zone-a.fit-height .zone-slide canvas,
+    #zone-b.fit-height .zone-slide img,
+    #zone-b.fit-height .zone-slide canvas {
+      height: 100% !important; width: auto !important; max-width:none; max-height:none;
+    }
+    /* 填滿全部（裁切）*/
+    #zone-a.fit-cover .zone-slide img,
+    #zone-b.fit-cover .zone-slide img {
+      width:100% !important; height:100% !important; object-fit:cover !important; max-width:none; max-height:none;
+    }
+
+    /* Fit toggle buttons (顯示在 zone 左下角，hover 才顯示) */
+    .fit-toggle {
+      position: absolute; bottom: 28px; left: 10px; z-index: 30;
+      display: flex; gap: 4px;
+      opacity: 0; transition: opacity 0.3s;
+      pointer-events: all;
+    }
+    #zone-a:hover .fit-toggle,
+    #zone-b:hover .fit-toggle,
+    .fit-toggle.always-show { opacity: 1; }
+    .ft-btn {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
+      padding: 4px 8px; border-radius: 5px; cursor: pointer; border: none;
+      background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.7);
+      backdrop-filter: blur(4px); transition: background 0.2s, color 0.2s;
+    }
+    .ft-btn:hover { background: rgba(255,255,255,0.3); color:#fff; }
+    .ft-btn.active { background: var(--accent); color: #fff; }
+    #zone-b .ft-btn.active { background: #3a9ad9; }
+
     /* Toast */
     #toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--text); color:#fff; padding:12px 26px; border-radius:var(--r); font-size:14px; z-index:9999; transition:transform 0.3s; pointer-events:none; white-space:nowrap; }
     #toast.show { transform:translateX(-50%) translateY(0); }
@@ -266,12 +312,24 @@
     <div class="zone-label" id="label-a">ZONE A</div>
     <div class="zone-progress" id="prog-a"></div>
     <div class="zone-dots" id="dots-a"></div>
+    <div class="fit-toggle" id="fit-a">
+      <button class="ft-btn active" onclick="setFit('a','contain')" id="fa-contain" title="自動（保持比例）">自動</button>
+      <button class="ft-btn" onclick="setFit('a','width')"   id="fa-width"   title="左右貼齊">← →</button>
+      <button class="ft-btn" onclick="setFit('a','height')"  id="fa-height"  title="上下貼齊">↑ ↓</button>
+      <button class="ft-btn" onclick="setFit('a','cover')"   id="fa-cover"   title="填滿（裁切）">填滿</button>
+    </div>
   </div>
   <div id="zone-divider"><div class="div-handle"></div></div>
   <div id="zone-b">
     <div class="zone-label" id="label-b">ZONE B</div>
     <div class="zone-progress" id="prog-b"></div>
     <div class="zone-dots" id="dots-b"></div>
+    <div class="fit-toggle" id="fit-b">
+      <button class="ft-btn active" onclick="setFit('b','contain')" id="fb-contain" title="自動（保持比例）">自動</button>
+      <button class="ft-btn" onclick="setFit('b','width')"   id="fb-width"   title="左右貼齊">← →</button>
+      <button class="ft-btn" onclick="setFit('b','height')"  id="fb-height"  title="上下貼齊">↑ ↓</button>
+      <button class="ft-btn" onclick="setFit('b','cover')"   id="fb-cover"   title="填滿（裁切）">填滿</button>
+    </div>
   </div>
 </div>
 
@@ -454,6 +512,7 @@ function setUploadZone(zone) {
 window.addEventListener('DOMContentLoaded', () => {
   loadConfig();
   applyStageLayout();
+  loadFitModes();
   setupKeyboard(); setupDropZone();
   document.getElementById('btn-close').addEventListener('click', closeAdmin);
 });
@@ -905,6 +964,36 @@ function setupKeyboard() {
   });
   document.getElementById('stage').addEventListener('click', () => { if (!adminOpen) next(); });
 }
+// ── FIT MODE ─────────────────────────────────────
+let fitMode = { a: 'contain', b: 'contain' };
+
+function setFit(zone, mode) {
+  fitMode[zone] = mode;
+  const el = document.getElementById('zone-' + zone);
+  el.classList.remove('fit-width', 'fit-height', 'fit-cover');
+  if (mode === 'width')   el.classList.add('fit-width');
+  if (mode === 'height')  el.classList.add('fit-height');
+  if (mode === 'cover')   el.classList.add('fit-cover');
+  // update button states
+  ['contain','width','height','cover'].forEach(m => {
+    const btn = document.getElementById('f' + zone[0] + '-' + m);
+    if (btn) btn.classList.toggle('active', m === mode);
+  });
+  // save
+  try { localStorage.setItem('sjps_fit', JSON.stringify(fitMode)); } catch(e) {}
+}
+
+function loadFitModes() {
+  try {
+    const s = localStorage.getItem('sjps_fit');
+    if (s) {
+      const saved = JSON.parse(s);
+      if (saved.a) setFit('a', saved.a);
+      if (saved.b) setFit('b', saved.b);
+    }
+  } catch(e) {}
+}
+
 function toggleFS() {
   if (!document.fullscreenElement) {
     document.documentElement.requestFullscreen().catch(e => showToast('全螢幕失敗：' + e.message));
