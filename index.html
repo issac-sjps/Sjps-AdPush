@@ -531,6 +531,12 @@ window.onGapiLoad = function() {
 // ── CONFIG ──────────────────────────────────────
 function loadConfig() {
   try { const s = localStorage.getItem('sjps_cfg'); if (s) CONFIG = { ...CONFIG, ...JSON.parse(s) }; } catch(e) {}
+  // 寫死的設定不能被 localStorage 覆蓋
+  CONFIG.FOLDER_ID    = '18_RG5qrn-8WVxyq6QwyNIW3afIMtKZGi';
+  CONFIG.FOLDER_ID_B  = '1HgYpnYUUozBY-k5_vBmE4wat3-qHNL5p';
+  CONFIG.API_KEY      = 'AIzaSyDiKpm2ZZU7I2JO2XR6SPAWALvFgf0ifWU';
+  CONFIG.CLIENT_ID    = '488969442881-g1vrrsg5h6dbl3dirk23mm4iofsm5c36.apps.googleusercontent.com';
+  CONFIG.SCRIPT_URL   = 'https://script.google.com/macros/s/AKfycbxGqwoNj86h0w56otayYe1a36d6ibWlTx2_WTLmvI68DxgaIq2iXK0eEMGs_fcMJpBcnA/exec';
   try { const d = localStorage.getItem('sjps_dur'); if (d) fileDurations = JSON.parse(d); } catch(e) {}
   try { const p = localStorage.getItem('sjps_pages'); if (p) filePages = JSON.parse(p); } catch(e) {}
   syncInputs();
@@ -856,9 +862,27 @@ async function buildSlideEls(zone='a') {
     } else if (m.startsWith('image/')) {
       const div = document.createElement('div'); div.className = 'zone-slide';
       const img = document.createElement('img');
-      img.src = `https://lh3.googleusercontent.com/d/${file.id}`;
+      // 直接用 Apps Script 取得原始圖片（最高畫質）
+      // 先嘗試 lh3 直接連結，失敗再透過 Script
       img.alt = file.name;
-      img.onerror = () => { img.src = `https://drive.google.com/thumbnail?id=${file.id}&sz=w1920`; };
+      img.src = `https://lh3.googleusercontent.com/d/${file.id}=s0`; // =s0 表示原始尺寸
+      img.onerror = () => {
+        // fallback 1: 透過 script 取原圖
+        if (CONFIG.SCRIPT_URL && !img._scriptTried) {
+          img._scriptTried = true;
+          fetch(`${CONFIG.SCRIPT_URL}?id=${file.id}`)
+            .then(r => r.json())
+            .then(j => {
+              if (j.data) img.src = `data:${j.mimeType};base64,${j.data}`;
+            })
+            .catch(() => {
+              img.src = `https://drive.google.com/thumbnail?id=${file.id}&sz=w3200`;
+            });
+        } else if (!img._thumbTried) {
+          img._thumbTried = true;
+          img.src = `https://drive.google.com/thumbnail?id=${file.id}&sz=w3200`;
+        }
+      };
       div.appendChild(img); zoneEl.appendChild(div);
       slideList.push(file);
     } else {
