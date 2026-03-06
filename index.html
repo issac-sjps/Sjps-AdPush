@@ -359,17 +359,12 @@
           <p style="font-size:13px;color:var(--sub)">使用主要 Drive 資料夾</p>
         </div>
 
-        <!-- Zone B config -->
+        <!-- Zone B config (hardcoded) -->
         <div class="zone-cfg" style="margin-top:10px;border-color:#3a9ad9">
           <div class="zone-cfg-title" style="color:#3a9ad9">▬ 下方 Zone B</div>
-          <div class="cfg-row" style="margin-top:8px">
-            <span class="cfg-key">資料夾 ID B</span>
-            <input class="cfg-val" id="inp-folderid-b" type="text" placeholder="下方 Zone B Drive 資料夾 ID">
-          </div>
-          <div class="cfg-row">
-            <span class="cfg-key">預設秒數 B</span>
-            <input class="cfg-val" id="inp-duration-b" type="number" placeholder="4" min="1" max="300">
-          </div>
+          <p style="font-size:13px;color:var(--sub)">資料夾已設定</p>
+          <input type="hidden" id="inp-folderid-b">
+          <input type="hidden" id="inp-duration-b">
         </div>
 
         <div class="btn-row" style="margin-top:14px">
@@ -424,11 +419,11 @@
 <script>
 let CONFIG = {
   FOLDER_ID:      '18_RG5qrn-8WVxyq6QwyNIW3afIMtKZGi',
-  FOLDER_ID_B:    '1HgYpnYUUozBY-k5_vBmE4wat3-qHNL5p',  // 右側 Zone B 的資料夾
+  FOLDER_ID_B:    '1HgYpnYUUozBY-k5_vBmE4wat3-qHNL5p',
   API_KEY:        'AIzaSyDiKpm2ZZU7I2JO2XR6SPAWALvFgf0ifWU',
   CLIENT_ID:      '488969442881-g1vrrsg5h6dbl3dirk23mm4iofsm5c36.apps.googleusercontent.com',
   SLIDE_DURATION:   4,
-  SLIDE_DURATION_B: 4,          // Zone B 預設秒數
+  SLIDE_DURATION_B: 4,
   LAYOUT_MODE:    'single',     // 'single' | 'split'
   LAYOUT_RATIO:   50,           // 左側百分比
   SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxGqwoNj86h0w56otayYe1a36d6ibWlTx2_WTLmvI68DxgaIq2iXK0eEMGs_fcMJpBcnA/exec',
@@ -720,7 +715,7 @@ async function renderPdfSlides(file, host, slideList, zone='a') {
 
   for (let p = 1; p <= numPages; p++) {
     const page = await pdfDoc.getPage(p);
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = Math.min(window.devicePixelRatio || 1, 3); // max 3x for performance
     const vp = page.getViewport({ scale: 1 });
     const scale = Math.min(zoneW / vp.width, zoneH / vp.height) * 0.96;
     // 乘以 dpr 讓高解析度螢幕也清晰
