@@ -1250,10 +1250,19 @@ function hideMusicBar() {
 }
 
 // auto-start music on page load
+// 只要任一 zone 有影片就不播音樂
+function hasVideoFiles() {
+  const allMedia = [...allFiles, ...allFilesB];
+  return allMedia.some(f => (f.mimeType || '').startsWith('video/'));
+}
+
 function initMusic() {
-  if (CONFIG.MUSIC_URL && CONFIG.MUSIC_AUTOPLAY) {
-    loadMusic(CONFIG.MUSIC_URL, CONFIG.MUSIC_VOL, CONFIG.MUSIC_LOOP, true);
+  if (!CONFIG.MUSIC_URL || !CONFIG.MUSIC_AUTOPLAY) return;
+  if (hasVideoFiles()) {
+    showToast('🎬 偵測到影片，背景音樂已停用');
+    return;
   }
+  loadMusic(CONFIG.MUSIC_URL, CONFIG.MUSIC_VOL, CONFIG.MUSIC_LOOP, true);
 }
 
 // ── AUTO-HIDE corner buttons ──────────────────────
