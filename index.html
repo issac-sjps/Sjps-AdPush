@@ -299,19 +299,14 @@
     #zone-b:hover .fit-toggle,
     .fit-toggle.always-show { opacity: 1; }
     /* ── 橫屏時 fit-toggle ── */
-    /* Stage 順時針90°: right→視覺bottom, bottom→視覺left
-       用 top:auto bottom:50% right:8px 讓它固定在視覺中下方
-       旋轉後整組按鈕維持在 zone 內 */
+    /* Stage 旋轉90°後，用 JS 動態定位（見 repositionFitToggles）*/
     body.page-rotated .fit-toggle {
-      top: auto;
-      left: auto;
-      bottom: 8px;
-      right: 8px;
+      position: fixed !important;
       transform: rotate(90deg);
-      transform-origin: right bottom;
+      transform-origin: left bottom;
       flex-direction: row;
       gap: 4px;
-      max-width: none;
+      z-index: 200;
     }
     .ft-btn {
       font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
@@ -832,8 +827,10 @@ function setupDividerDrag() {
     const rotated = document.body.classList.contains('page-rotated');
     let pct;
     if (rotated) {
-      // stage is rotated 90°: horizontal drag (clientX) controls the split
-      pct = ((clientX - rect.left) / rect.width) * 100;
+      // Stage rotated 90° CW: zone-a (CSS top) becomes visual LEFT
+      // Dragging right (bigger clientX) = divider moves right visually
+      // = zone-b (right) gets bigger = zone-a pct DECREASES → invert
+      pct = 100 - ((clientX - rect.left) / rect.width) * 100;
     } else {
       pct = ((clientY - rect.top) / rect.height) * 100;
     }
@@ -1244,6 +1241,27 @@ function loadFitModes() {
 }
 
 // ── 整個畫面旋轉 ──
+function repositionFitToggles() {
+  const rotated = document.body.classList.contains('page-rotated');
+  ['a','b'].forEach(zone => {
+    const ft = document.getElementById('fit-' + zone);
+    const zoneEl = document.getElementById('zone-' + zone);
+    if (!ft || !zoneEl) return;
+    if (rotated) {
+      const r = zoneEl.getBoundingClientRect();
+      // Visual bottom-left of each zone = CSS right + bottom after rotation
+      // Place at visual bottom-left: x = r.left + 12, y = r.bottom - 12
+      ft.style.left  = (r.left + 12) + 'px';
+      ft.style.bottom = (window.innerHeight - r.bottom + 12) + 'px';
+      ft.style.top  = 'auto';
+      ft.style.right = 'auto';
+    } else {
+      ft.style.left = ''; ft.style.bottom = '';
+      ft.style.top = ''; ft.style.right = '';
+    }
+  });
+}
+
 function togglePageRotate() {
   const isRotated = document.body.classList.toggle('page-rotated');
   const btn = document.getElementById('btn-page-rotate');
@@ -1254,6 +1272,7 @@ function togglePageRotate() {
   CONFIG.PAGE_ROTATED = isRotated;
   try { localStorage.setItem('sjps_cfg', JSON.stringify(CONFIG)); } catch(e) {}
   showToast(isRotated ? '↻ 畫面旋轉 90°' : '↺ 還原直屏');
+  setTimeout(repositionFitToggles, 50);
 }
 
 // zoneRotation: 每個 zone 目前旋轉角度 (0/90/180/270)
