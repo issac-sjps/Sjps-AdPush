@@ -515,7 +515,7 @@
   <div id="corner-btns">
     <button class="corner-btn" onclick="openAdmin()" title="管理面板">⚙️</button>
     <button class="corner-btn" id="btn-page-rotate" onclick="togglePageRotate()" title="切換直/橫屏">橫</button>
-    <button class="corner-btn" id="btn-fs" onclick="toggleFS()" title="全螢幕">全</button>
+    <button class="corner-btn" id="btn-fs" onclick="toggleFS()" title="全螢幕">⛶</button>
   </div>
 
   <!-- 底部中央 hover 控制（單zone模式用，split時由zone內按鈕控制）-->
@@ -1342,7 +1342,7 @@ function toggleFS() {
 // Update fullscreen button icon on change
 document.addEventListener('fullscreenchange', () => {
   const btn = document.getElementById('btn-fs');
-  if (btn) btn.textContent = document.fullscreenElement ? '縮' : '全';
+  if (btn) btn.textContent = document.fullscreenElement ? '✕' : '⛶'; btn.style.background = document.fullscreenElement ? 'rgba(180,30,30,0.85)' : '';
 });
 
 // ── MUSIC ────────────────────────────────────────
