@@ -144,11 +144,19 @@
 
     /* ── 右上角常駐按鈕 ── */
     #corner-btns {
-      position: absolute; top: 16px; right: 16px;
+      position: fixed; top: 16px; right: 16px;
       display: flex; gap: 8px;
       pointer-events: all;
       opacity: 1;
       transition: opacity 0.6s ease;
+      z-index: 400;
+    }
+    /* 旋轉後 corner-btns 固定在視覺右上角 */
+    body.page-rotated #corner-btns {
+      top: auto; right: auto;
+      bottom: 16px; left: 16px;
+      transform: rotate(-90deg);
+      transform-origin: bottom left;
     }
     #corner-btns.hidden { opacity: 0; pointer-events: none; }
     .corner-btn {
@@ -176,7 +184,9 @@
       height: 10px; width: 100%; background: transparent;
       flex-shrink: 0; cursor: row-resize; z-index:50;
       position: relative; display: flex; align-items: center; justify-content: center;
+      transition: cursor 0.2s;
     }
+    body.page-rotated #zone-divider { cursor: col-resize; }
     #zone-divider::after {
       content: ''; display: block;
       width: 100%; height: 3px;
@@ -289,6 +299,11 @@
     #zone-a:hover .fit-toggle,
     #zone-b:hover .fit-toggle,
     .fit-toggle.always-show { opacity: 1; }
+    /* 旋轉後 fit-toggle 移到右上角（視覺上的左下角） */
+    body.page-rotated .fit-toggle {
+      bottom: auto; left: auto;
+      top: 8px; right: 8px;
+    }
     .ft-btn {
       font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
       padding: 4px 8px; border-radius: 5px; cursor: pointer; border: none;
@@ -797,45 +812,49 @@ function setupDividerDrag() {
   const divider = document.getElementById('zone-divider');
   const stage   = document.getElementById('stage');
   const zoneA   = document.getElementById('zone-a');
-  if (!divider._dragSetup) {
-    divider._dragSetup = true;
+  if (divider._dragSetup) return;
+  divider._dragSetup = true;
 
-    function onMove(clientY) {
-      const rect = stage.getBoundingClientRect();
-      let pct = ((clientY - rect.top) / rect.height) * 100;
-      pct = Math.min(Math.max(pct, 15), 85);
-      CONFIG.LAYOUT_RATIO = Math.round(pct);
-      zoneA.style.height = pct + '%';
-      updateRatioDisplay(CONFIG.LAYOUT_RATIO);
-      // update hidden input
-      const ri = document.getElementById('inp-ratio');
-      if (ri) ri.value = CONFIG.LAYOUT_RATIO;
+  function onMove(clientX, clientY) {
+    const rect = stage.getBoundingClientRect();
+    const rotated = document.body.classList.contains('page-rotated');
+    let pct;
+    if (rotated) {
+      // stage is rotated 90°: horizontal drag (clientX) controls the split
+      pct = ((clientX - rect.left) / rect.width) * 100;
+    } else {
+      pct = ((clientY - rect.top) / rect.height) * 100;
     }
-    function stopDrag() {
-      divider.classList.remove('dragging');
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', stopDrag);
-      document.removeEventListener('touchmove', onTouchMove);
-      document.removeEventListener('touchend', stopDrag);
-      // save
-      try { localStorage.setItem('sjps_cfg', JSON.stringify(CONFIG)); } catch(e) {}
-    }
-    function onMouseMove(e) { onMove(e.clientY); }
-    function onTouchMove(e) { e.preventDefault(); onMove(e.touches[0].clientY); }
-
-    divider.addEventListener('mousedown', e => {
-      e.preventDefault();
-      divider.classList.add('dragging');
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', stopDrag);
-    });
-    divider.addEventListener('touchstart', e => {
-      e.preventDefault();
-      divider.classList.add('dragging');
-      document.addEventListener('touchmove', onTouchMove, { passive: false });
-      document.addEventListener('touchend', stopDrag);
-    }, { passive: false });
+    pct = Math.min(Math.max(pct, 15), 85);
+    CONFIG.LAYOUT_RATIO = Math.round(pct);
+    zoneA.style.height = pct + '%';
+    updateRatioDisplay(CONFIG.LAYOUT_RATIO);
+    const ri = document.getElementById('inp-ratio');
+    if (ri) ri.value = CONFIG.LAYOUT_RATIO;
   }
+  function stopDrag() {
+    divider.classList.remove('dragging');
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', stopDrag);
+    document.removeEventListener('touchmove', onTouchMove);
+    document.removeEventListener('touchend', stopDrag);
+    try { localStorage.setItem('sjps_cfg', JSON.stringify(CONFIG)); } catch(e) {}
+  }
+  function onMouseMove(e) { onMove(e.clientX, e.clientY); }
+  function onTouchMove(e) { e.preventDefault(); onMove(e.touches[0].clientX, e.touches[0].clientY); }
+
+  divider.addEventListener('mousedown', e => {
+    e.preventDefault();
+    divider.classList.add('dragging');
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', stopDrag);
+  });
+  divider.addEventListener('touchstart', e => {
+    e.preventDefault();
+    divider.classList.add('dragging');
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend', stopDrag);
+  }, { passive: false });
 }
 
 // ── FETCH ────────────────────────────────────────
