@@ -47,8 +47,8 @@
     #slide-controls { position:absolute; bottom:52px; left:50%; transform:translateX(-50%); display:flex; gap:12px; opacity:0; transition:opacity 0.3s; pointer-events:all; }
     body.has-split #slide-controls { display: none; }
     #hud:hover #slide-controls { opacity:1; }
-    .ctrl-btn { background:rgba(255,255,255,0.92); border:none; width:46px; height:46px; border-radius:50%; cursor:pointer; font-size:20px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 14px rgba(0,0,0,0.25); transition:transform 0.15s; pointer-events:all; }
-    .ctrl-btn:hover { transform:scale(1.12); }
+    .ctrl-btn { background:rgba(20,20,20,0.72); border:1px solid rgba(255,255,255,0.25); color:#fff; width:42px; height:42px; border-radius:50%; cursor:pointer; font-size:24px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,0.6); transition:background 0.2s, transform 0.15s; pointer-events:all; }
+    .ctrl-btn:hover { background:rgba(224,92,26,0.9); transform:scale(1.12); }
     #admin-trigger { position:absolute; top:0; right:0; width:80px; height:80px; pointer-events:all; cursor:pointer; }
 
     /* SETUP */
@@ -686,8 +686,7 @@
 
 <!-- Music bar -->
 <div id="music-bar" class="no-music">
-  <span class="mb-icon">🎵</span>
-  <span id="mb-title">載入中…</span>
+  <span id="mb-title">🎵 背景音樂</span>
   <button class="mb-btn" id="mb-playpause" onclick="musicToggle()" title="播放/暫停">⏸</button>
   <button class="mb-btn" id="mb-mute" onclick="musicMute()" title="靜音/取消靜音">🔊</button>
   <input type="range" id="mb-vol" min="0" max="100" value="30" oninput="musicVolume(this.value)" title="音量">
@@ -1389,7 +1388,7 @@ function loadMusic(url, vol, loop, autoplay) {
   if (!videoId) return;
   const bar = document.getElementById('music-bar');
   bar.classList.remove('no-music');
-  document.getElementById('mb-title').textContent = '載入中…';
+  document.getElementById('mb-title').textContent = '⏳ 載入中…';
   if (!ytReady) {
     // load YT IFrame API
     const tag = document.createElement('script');
