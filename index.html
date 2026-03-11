@@ -151,12 +151,11 @@
       transition: opacity 0.6s ease;
       z-index: 400;
     }
-    /* 旋轉後 corner-btns 固定在視覺右上角 */
+    /* 旋轉後 corner-btns 固定在視覺右上角（stage右上 = 畫面右上） */
     body.page-rotated #corner-btns {
-      top: auto; right: auto;
-      bottom: 16px; left: 16px;
-      transform: rotate(-90deg);
-      transform-origin: bottom left;
+      top: 16px; right: 16px;
+      bottom: auto; left: auto;
+      transform: none;
     }
     #corner-btns.hidden { opacity: 0; pointer-events: none; }
     .corner-btn {
@@ -299,10 +298,17 @@
     #zone-a:hover .fit-toggle,
     #zone-b:hover .fit-toggle,
     .fit-toggle.always-show { opacity: 1; }
-    /* 旋轉後 fit-toggle 移到右上角（視覺上的左下角） */
+    /* ── 橫屏時 fit-toggle：反轉文字、移到視覺底部 ── */
     body.page-rotated .fit-toggle {
-      bottom: auto; left: auto;
-      top: 8px; right: 8px;
+      /* 位置：視覺上各 zone 的左下角 = 旋轉後的 bottom, left */
+      bottom: 12px;
+      left: 50%;
+      top: auto; right: auto;
+      transform: translateX(-50%) rotate(-90deg);
+      transform-origin: center center;
+      /* 橫排變直排，文字轉正 */
+      flex-direction: column;
+      gap: 4px;
     }
     .ft-btn {
       font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
@@ -311,6 +317,11 @@
       backdrop-filter: blur(6px);
       box-shadow: 0 1px 4px rgba(0,0,0,0.4);
       transition: background 0.2s, color 0.2s;
+      white-space: nowrap;
+    }
+    /* 橫屏時按鈕文字再轉回正 */
+    body.page-rotated .ft-btn {
+      transform: rotate(90deg);
     }
     .ft-btn:hover { background: rgba(40,40,40,0.92); color:#fff; }
     .ft-btn.active { background: var(--accent); color: #fff; }
