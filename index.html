@@ -292,10 +292,12 @@
     .ft-btn {
       font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
       padding: 4px 8px; border-radius: 5px; cursor: pointer; border: none;
-      background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.7);
-      backdrop-filter: blur(4px); transition: background 0.2s, color 0.2s;
+      background: rgba(20,20,20,0.75); color: rgba(255,255,255,0.85);
+      backdrop-filter: blur(6px);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+      transition: background 0.2s, color 0.2s;
     }
-    .ft-btn:hover { background: rgba(255,255,255,0.3); color:#fff; }
+    .ft-btn:hover { background: rgba(40,40,40,0.92); color:#fff; }
     .ft-btn.active { background: var(--accent); color: #fff; }
     #zone-b .ft-btn.active { background: #3a9ad9; }
 
@@ -353,35 +355,39 @@
 
     /* ── ROTATION ── */
     /* ── 整個畫面旋轉（直屏↔橫屏）── */
-    body.page-rotated {
-      overflow: hidden;
-    }
+    body.page-rotated { overflow: hidden; }
+
+    /* Stage 和 HUD 整體旋轉 90° */
     body.page-rotated #stage,
-    body.page-rotated #hud,
-    body.page-rotated #music-bar {
-      transform-origin: center center;
-    }
-    body.page-rotated #stage {
-      transform: rotate(90deg);
-      width: 100vh;
-      height: 100vw;
-      position: fixed;
-      top: calc(50% - 50vw);
-      left: calc(50% - 50vh);
-    }
     body.page-rotated #hud {
       transform: rotate(90deg);
       width: 100vh;
       height: 100vw;
       position: fixed;
-      top: calc(50% - 50vw);
-      left: calc(50% - 50vh);
+      top:  calc(50vh - 50vw);
+      left: calc(50vw - 50vh);
     }
+
+    /* 旋轉後 stage 是左右分割，zone 內圖片/canvas 要反轉 -90° 讓內容變正 */
+    body.page-rotated .zone-slide > img,
+    body.page-rotated .zone-slide > canvas {
+      transform: rotate(-90deg);
+      transform-origin: center center;
+      width: 100vw !important;
+      height: 100vh !important;
+      max-width: none; max-height: none;
+      position: absolute;
+      top: 50%; left: 50%;
+      margin-top: -50vh; margin-left: -50vw;
+    }
+
+    /* 音樂膠囊在旋轉後固定在畫面底部中間 */
     body.page-rotated #music-bar {
       transform: rotate(90deg) translateX(-50%);
-      transform-origin: bottom center;
-      bottom: calc(50% - 50vw + 12px);
-      left: 50%;
+      transform-origin: bottom left;
+      bottom: auto;
+      left: calc(50vh - 50vw);
+      top: calc(100vw - 56px);
     }
 
     /* ── Zone 內容旋轉（每格獨立）── */
