@@ -350,6 +350,36 @@
       transition: all 0.2s; }
     .sel-btn:hover { border-color:var(--accent); color:var(--accent); }
 
+
+    /* ── ROTATION ── */
+    /* 整個 stage 旋轉 90 度（直屏變橫屏） */
+    #stage.rotate90 {
+      transform-origin: center center;
+      transform: rotate(90deg);
+      width: 100vh;
+      height: 100vw;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      margin-top: -50vw;
+      margin-left: -50vh;
+    }
+    /* 旋轉時 HUD 也跟著旋轉 */
+    body.rotated #hud {
+      transform-origin: center center;
+      transform: rotate(90deg);
+      width: 100vh;
+      height: 100vw;
+      top: 50%;
+      left: 50%;
+      margin-top: -50vw;
+      margin-left: -50vh;
+    }
+    /* 旋轉按鈕 */
+    #btn-rotate {
+      /* 顯示在右上角按鈕群 */
+    }
+
     /* Toast */
     #toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--text); color:#fff; padding:12px 26px; border-radius:var(--r); font-size:14px; z-index:9999; transition:transform 0.3s; pointer-events:none; white-space:nowrap; }
     #toast.show { transform:translateX(-50%) translateY(0); }
@@ -388,9 +418,10 @@
   <div id="brand">SJPS · AdPush</div>
   <div id="counter"></div>
 
-  <!-- 右上角：設定 + 全螢幕 -->
+  <!-- 右上角：設定 + 旋轉 + 全螢幕 -->
   <div id="corner-btns">
     <button class="corner-btn" onclick="openAdmin()" title="管理面板">⚙️</button>
+    <button class="corner-btn" id="btn-rotate" onclick="toggleRotate()" title="旋轉90°">⟳</button>
     <button class="corner-btn" id="btn-fs" onclick="toggleFS()" title="全螢幕">⛶</button>
   </div>
 
@@ -615,6 +646,7 @@ window.addEventListener('DOMContentLoaded', () => {
   loadConfig();
   loadSelectedFiles();
   applyStageLayout();
+  if (CONFIG.ROTATED) toggleRotate();
   loadFitModes();
   setupKeyboard(); setupDropZone();
   document.getElementById('btn-close').addEventListener('click', closeAdmin);
@@ -1137,6 +1169,18 @@ function loadFitModes() {
       if (saved.b) setFit('b', saved.b);
     }
   } catch(e) {}
+}
+
+function toggleRotate() {
+  const stage = document.getElementById('stage');
+  const hud   = document.getElementById('hud');
+  const btn   = document.getElementById('btn-rotate');
+  const isRotated = stage.classList.toggle('rotate90');
+  document.body.classList.toggle('rotated', isRotated);
+  if (btn) btn.style.background = isRotated ? 'rgba(224,92,26,0.6)' : '';
+  CONFIG.ROTATED = isRotated;
+  try { localStorage.setItem('sjps_cfg', JSON.stringify(CONFIG)); } catch(e) {}
+  showToast(isRotated ? '↻ 已旋轉 90°' : '↺ 已還原');
 }
 
 function toggleFS() {
