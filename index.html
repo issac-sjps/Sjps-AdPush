@@ -352,25 +352,32 @@
 
 
     /* ── ROTATION ── */
-    /* ── 整個畫面旋轉 90 度（直屏→橫屏）── */
-    body.rotated #stage,
-    body.rotated #hud {
-      transform-origin: center center;
+    /* ── Zone 內容旋轉（每格獨立）── */
+    /* rotate0=不旋轉, rotate90=順時針90, rotate180=180, rotate270=270 */
+    .zone-rotate90  .zone-slide > img,
+    .zone-rotate90  .zone-slide > canvas {
       transform: rotate(90deg);
-      width: 100vh  !important;
-      height: 100vw !important;
-      position: fixed;
-      top:  calc(50vh - 50vw);
-      left: calc(50vw - 50vh);
-      margin: 0;
+      transform-origin: center center;
+      width: 100vh !important; height: 100vw !important;
+      max-width: none; max-height: none;
+      position: absolute;
+      top: 50%; left: 50%;
+      margin-top: -50vw; margin-left: -50vh;
     }
-    /* 內容（圖片/canvas）也要跟著轉正 → 再轉 -90 以抵消，不需要，
-       因為內容本來就是直的，stage 轉後它們自然變橫 */
-
-    /* 旋轉時讓 zone 撐滿新的寬高 */
-    body.rotated #zone-a,
-    body.rotated #zone-b {
-      min-height: 0;
+    .zone-rotate180 .zone-slide > img,
+    .zone-rotate180 .zone-slide > canvas {
+      transform: rotate(180deg);
+      transform-origin: center center;
+    }
+    .zone-rotate270 .zone-slide > img,
+    .zone-rotate270 .zone-slide > canvas {
+      transform: rotate(270deg);
+      transform-origin: center center;
+      width: 100vh !important; height: 100vw !important;
+      max-width: none; max-height: none;
+      position: absolute;
+      top: 50%; left: 50%;
+      margin-top: -50vw; margin-left: -50vh;
     }
 
     /* Toast */
@@ -391,6 +398,7 @@
       <button class="ft-btn" onclick="setFit('a','width')"   id="fa-width"   title="左右貼齊">← →</button>
       <button class="ft-btn" onclick="setFit('a','height')"  id="fa-height"  title="上下貼齊">↑ ↓</button>
       <button class="ft-btn" onclick="setFit('a','cover')"   id="fa-cover"   title="填滿（裁切）">填滿</button>
+      <button class="ft-btn" onclick="rotateZone('a')"       id="fa-rotate"  title="旋轉90°">⟳</button>
     </div>
   </div>
   <div id="zone-divider"><div class="div-handle"></div></div>
@@ -403,6 +411,7 @@
       <button class="ft-btn" onclick="setFit('b','width')"   id="fb-width"   title="左右貼齊">← →</button>
       <button class="ft-btn" onclick="setFit('b','height')"  id="fb-height"  title="上下貼齊">↑ ↓</button>
       <button class="ft-btn" onclick="setFit('b','cover')"   id="fb-cover"   title="填滿（裁切）">填滿</button>
+      <button class="ft-btn" onclick="rotateZone('b')"       id="fb-rotate"  title="旋轉90°">⟳</button>
     </div>
   </div>
 </div>
@@ -411,10 +420,9 @@
   <div id="brand">SJPS · AdPush</div>
   <div id="counter"></div>
 
-  <!-- 右上角：設定 + 旋轉 + 全螢幕 -->
+  <!-- 右上角：設定 + 全螢幕 -->
   <div id="corner-btns">
     <button class="corner-btn" onclick="openAdmin()" title="管理面板">⚙️</button>
-    <button class="corner-btn" id="btn-rotate" onclick="toggleRotate()" title="旋轉90°">⟳</button>
     <button class="corner-btn" id="btn-fs" onclick="toggleFS()" title="全螢幕">⛶</button>
   </div>
 
@@ -639,7 +647,6 @@ window.addEventListener('DOMContentLoaded', () => {
   loadConfig();
   loadSelectedFiles();
   applyStageLayout();
-  if (CONFIG.ROTATED) toggleRotate();
   loadFitModes();
   setupKeyboard(); setupDropZone();
   document.getElementById('btn-close').addEventListener('click', closeAdmin);
@@ -826,6 +833,7 @@ async function fetchAndBuildSlides() {
 
     startSlideshow();
     document.getElementById('setup-screen').classList.remove('show');
+    loadZoneRotation();
     initMusic();
 
   } catch(e) {
@@ -1164,16 +1172,39 @@ function loadFitModes() {
   } catch(e) {}
 }
 
-function toggleRotate() {
-  const isRotated = document.body.classList.toggle('rotated');
-  const btn = document.getElementById('btn-rotate');
-  if (btn) {
-    btn.style.background = isRotated ? 'rgba(224,92,26,0.6)' : '';
-    btn.textContent = isRotated ? '⟲' : '⟳';
-  }
-  CONFIG.ROTATED = isRotated;
-  try { localStorage.setItem('sjps_cfg', JSON.stringify(CONFIG)); } catch(e) {}
-  showToast(isRotated ? '↻ 已旋轉 90°（直→橫）' : '↺ 已還原直屏');
+// zoneRotation: 每個 zone 目前旋轉角度 (0/90/180/270)
+let zoneRotation = { a: 0, b: 0 };
+
+function rotateZone(zone) {
+  const el = document.getElementById('zone-' + zone);
+  const btn = document.getElementById('f' + zone + '-rotate');
+  // remove old class
+  el.classList.remove('zone-rotate90','zone-rotate180','zone-rotate270');
+  // advance 90
+  zoneRotation[zone] = (zoneRotation[zone] + 90) % 360;
+  const deg = zoneRotation[zone];
+  if (deg === 90)  el.classList.add('zone-rotate90');
+  if (deg === 180) el.classList.add('zone-rotate180');
+  if (deg === 270) el.classList.add('zone-rotate270');
+  // highlight button when not at 0
+  if (btn) btn.classList.toggle('active', deg !== 0);
+  // save
+  try {
+    localStorage.setItem('sjps_rot', JSON.stringify(zoneRotation));
+  } catch(e) {}
+  showToast('Zone ' + zone.toUpperCase() + ' 旋轉 ' + deg + '°');
+}
+
+function loadZoneRotation() {
+  try {
+    const s = localStorage.getItem('sjps_rot');
+    if (s) {
+      const d = JSON.parse(s);
+      zoneRotation = { a: 0, b: 0 };
+      if (d.a) { zoneRotation.a = 0; for(let i=0;i<d.a/90;i++) rotateZone('a'); }
+      if (d.b) { zoneRotation.b = 0; for(let i=0;i<d.b/90;i++) rotateZone('b'); }
+    }
+  } catch(e) {}
 }
 
 function toggleFS() {
