@@ -352,6 +352,38 @@
 
 
     /* ── ROTATION ── */
+    /* ── 整個畫面旋轉（直屏↔橫屏）── */
+    body.page-rotated {
+      overflow: hidden;
+    }
+    body.page-rotated #stage,
+    body.page-rotated #hud,
+    body.page-rotated #music-bar {
+      transform-origin: center center;
+    }
+    body.page-rotated #stage {
+      transform: rotate(90deg);
+      width: 100vh;
+      height: 100vw;
+      position: fixed;
+      top: calc(50% - 50vw);
+      left: calc(50% - 50vh);
+    }
+    body.page-rotated #hud {
+      transform: rotate(90deg);
+      width: 100vh;
+      height: 100vw;
+      position: fixed;
+      top: calc(50% - 50vw);
+      left: calc(50% - 50vh);
+    }
+    body.page-rotated #music-bar {
+      transform: rotate(90deg) translateX(-50%);
+      transform-origin: bottom center;
+      bottom: calc(50% - 50vw + 12px);
+      left: 50%;
+    }
+
     /* ── Zone 內容旋轉（每格獨立）── */
     /* rotate0=不旋轉, rotate90=順時針90, rotate180=180, rotate270=270 */
     .zone-rotate90  .zone-slide > img,
@@ -420,9 +452,10 @@
   <div id="brand">SJPS · AdPush</div>
   <div id="counter"></div>
 
-  <!-- 右上角：設定 + 全螢幕 -->
+  <!-- 右上角：設定 + 旋轉 + 全螢幕 -->
   <div id="corner-btns">
     <button class="corner-btn" onclick="openAdmin()" title="管理面板">⚙️</button>
+    <button class="corner-btn" id="btn-page-rotate" onclick="togglePageRotate()" title="整個畫面旋轉90°">⤢</button>
     <button class="corner-btn" id="btn-fs" onclick="toggleFS()" title="全螢幕">⛶</button>
   </div>
 
@@ -648,6 +681,7 @@ window.addEventListener('DOMContentLoaded', () => {
   loadSelectedFiles();
   applyStageLayout();
   loadFitModes();
+  if (CONFIG.PAGE_ROTATED) togglePageRotate();
   setupKeyboard(); setupDropZone();
   document.getElementById('btn-close').addEventListener('click', closeAdmin);
 });
@@ -1170,6 +1204,19 @@ function loadFitModes() {
       if (saved.b) setFit('b', saved.b);
     }
   } catch(e) {}
+}
+
+// ── 整個畫面旋轉 ──
+function togglePageRotate() {
+  const isRotated = document.body.classList.toggle('page-rotated');
+  const btn = document.getElementById('btn-page-rotate');
+  if (btn) {
+    btn.style.background = isRotated ? 'rgba(224,92,26,0.6)' : '';
+    btn.textContent = isRotated ? '⤡' : '⤢';
+  }
+  CONFIG.PAGE_ROTATED = isRotated;
+  try { localStorage.setItem('sjps_cfg', JSON.stringify(CONFIG)); } catch(e) {}
+  showToast(isRotated ? '↻ 畫面旋轉 90°' : '↺ 還原直屏');
 }
 
 // zoneRotation: 每個 zone 目前旋轉角度 (0/90/180/270)
