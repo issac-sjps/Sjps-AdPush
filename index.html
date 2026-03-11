@@ -45,6 +45,7 @@
 
     /* Hover controls */
     #slide-controls { position:absolute; bottom:52px; left:50%; transform:translateX(-50%); display:flex; gap:12px; opacity:0; transition:opacity 0.3s; pointer-events:all; }
+    body.has-split #slide-controls { display: none; }
     #hud:hover #slide-controls { opacity:1; }
     .ctrl-btn { background:rgba(255,255,255,0.92); border:none; width:46px; height:46px; border-radius:50%; cursor:pointer; font-size:20px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 14px rgba(0,0,0,0.25); transition:transform 0.15s; pointer-events:all; }
     .ctrl-btn:hover { transform:scale(1.12); }
@@ -425,6 +426,35 @@
       margin-top: -50vw; margin-left: -50vh;
     }
 
+
+    /* ── Per-zone navigation arrows ── */
+    .zone-nav {
+      position: absolute;
+      bottom: 28px; right: 10px;
+      z-index: 30;
+      display: flex; gap: 6px;
+      opacity: 0; transition: opacity 0.3s;
+      pointer-events: all;
+    }
+    #zone-a:hover .zone-nav,
+    #zone-b:hover .zone-nav,
+    .zone-nav.always-show { opacity: 1; }
+    /* 單一zone模式隱藏 zone-b nav */
+    body:not(.has-split) #nav-b { display: none; }
+    .zone-nav-btn {
+      background: rgba(20,20,20,0.82);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: #fff;
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      font-size: 20px; line-height: 1;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+      transition: background 0.2s, transform 0.15s;
+    }
+    .zone-nav-btn:hover { background: rgba(224,92,26,0.85); transform: scale(1.1); }
+
     /* Toast */
     #toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--text); color:#fff; padding:12px 26px; border-radius:var(--r); font-size:14px; z-index:9999; transition:transform 0.3s; pointer-events:none; white-space:nowrap; }
     #toast.show { transform:translateX(-50%) translateY(0); }
@@ -438,6 +468,11 @@
     <div class="zone-label" id="label-a">ZONE A</div>
     <div class="zone-progress" id="prog-a"></div>
     <div class="zone-dots" id="dots-a"></div>
+    <!-- Zone A 手動翻頁 -->
+    <div class="zone-nav" id="nav-a">
+      <button class="zone-nav-btn" onclick="prev()" title="上一張">‹</button>
+      <button class="zone-nav-btn" onclick="next()" title="下一張">›</button>
+    </div>
     <div class="fit-toggle" id="fit-a">
       <button class="ft-btn active" onclick="setFit('a','contain')" id="fa-contain" title="自動（保持比例）">自動</button>
       <button class="ft-btn" onclick="setFit('a','width')"   id="fa-width"   title="左右貼齊">← →</button>
@@ -451,6 +486,11 @@
     <div class="zone-label" id="label-b">ZONE B</div>
     <div class="zone-progress" id="prog-b"></div>
     <div class="zone-dots" id="dots-b"></div>
+    <!-- Zone B 手動翻頁 -->
+    <div class="zone-nav" id="nav-b">
+      <button class="zone-nav-btn" onclick="prevB()" title="上一張">‹</button>
+      <button class="zone-nav-btn" onclick="nextB()" title="下一張">›</button>
+    </div>
     <div class="fit-toggle" id="fit-b">
       <button class="ft-btn active" onclick="setFit('b','contain')" id="fb-contain" title="自動（保持比例）">自動</button>
       <button class="ft-btn" onclick="setFit('b','width')"   id="fb-width"   title="左右貼齊">← →</button>
@@ -472,7 +512,7 @@
     <button class="corner-btn" id="btn-fs" onclick="toggleFS()" title="全螢幕">⛶</button>
   </div>
 
-  <!-- 底部中央 hover 控制 -->
+  <!-- 底部中央 hover 控制（單zone模式用，split時由zone內按鈕控制）-->
   <div id="slide-controls">
     <button class="ctrl-btn" onclick="prev()">‹</button>
     <button class="ctrl-btn" onclick="next()">›</button>
