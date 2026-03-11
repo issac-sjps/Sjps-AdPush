@@ -352,32 +352,25 @@
 
 
     /* ── ROTATION ── */
-    /* 整個 stage 旋轉 90 度（直屏變橫屏） */
-    #stage.rotate90 {
-      transform-origin: center center;
-      transform: rotate(90deg);
-      width: 100vh;
-      height: 100vw;
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      margin-top: -50vw;
-      margin-left: -50vh;
-    }
-    /* 旋轉時 HUD 也跟著旋轉 */
+    /* ── 整個畫面旋轉 90 度（直屏→橫屏）── */
+    body.rotated #stage,
     body.rotated #hud {
       transform-origin: center center;
       transform: rotate(90deg);
-      width: 100vh;
-      height: 100vw;
-      top: 50%;
-      left: 50%;
-      margin-top: -50vw;
-      margin-left: -50vh;
+      width: 100vh  !important;
+      height: 100vw !important;
+      position: fixed;
+      top:  calc(50vh - 50vw);
+      left: calc(50vw - 50vh);
+      margin: 0;
     }
-    /* 旋轉按鈕 */
-    #btn-rotate {
-      /* 顯示在右上角按鈕群 */
+    /* 內容（圖片/canvas）也要跟著轉正 → 再轉 -90 以抵消，不需要，
+       因為內容本來就是直的，stage 轉後它們自然變橫 */
+
+    /* 旋轉時讓 zone 撐滿新的寬高 */
+    body.rotated #zone-a,
+    body.rotated #zone-b {
+      min-height: 0;
     }
 
     /* Toast */
@@ -1172,15 +1165,15 @@ function loadFitModes() {
 }
 
 function toggleRotate() {
-  const stage = document.getElementById('stage');
-  const hud   = document.getElementById('hud');
-  const btn   = document.getElementById('btn-rotate');
-  const isRotated = stage.classList.toggle('rotate90');
-  document.body.classList.toggle('rotated', isRotated);
-  if (btn) btn.style.background = isRotated ? 'rgba(224,92,26,0.6)' : '';
+  const isRotated = document.body.classList.toggle('rotated');
+  const btn = document.getElementById('btn-rotate');
+  if (btn) {
+    btn.style.background = isRotated ? 'rgba(224,92,26,0.6)' : '';
+    btn.textContent = isRotated ? '⟲' : '⟳';
+  }
   CONFIG.ROTATED = isRotated;
   try { localStorage.setItem('sjps_cfg', JSON.stringify(CONFIG)); } catch(e) {}
-  showToast(isRotated ? '↻ 已旋轉 90°' : '↺ 已還原');
+  showToast(isRotated ? '↻ 已旋轉 90°（直→橫）' : '↺ 已還原直屏');
 }
 
 function toggleFS() {
