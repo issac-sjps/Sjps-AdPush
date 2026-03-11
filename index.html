@@ -651,6 +651,7 @@
   <span class="mb-icon">🎵</span>
   <span id="mb-title">載入中…</span>
   <button class="mb-btn" id="mb-playpause" onclick="musicToggle()" title="播放/暫停">⏸</button>
+  <button class="mb-btn" id="mb-mute" onclick="musicMute()" title="靜音/取消靜音">🔊</button>
   <input type="range" id="mb-vol" min="0" max="100" value="30" oninput="musicVolume(this.value)" title="音量">
   <button class="mb-btn" onclick="hideMusicBar()" title="隱藏音樂列">✕</button>
 </div>
@@ -1396,6 +1397,34 @@ function musicToggle() {
 
 function musicVolume(val) {
   if (ytPlayer) ytPlayer.setVolume(parseInt(val));
+  // if manually adjusting volume, unmute
+  if (parseInt(val) > 0) {
+    _musicMuted = false;
+    const btn = document.getElementById('mb-mute');
+    if (btn) btn.textContent = '🔊';
+  }
+}
+
+let _musicMuted = false;
+let _musicVolBeforeMute = 30;
+
+function musicMute() {
+  const btn = document.getElementById('mb-mute');
+  const slider = document.getElementById('mb-vol');
+  if (_musicMuted) {
+    // unmute
+    _musicMuted = false;
+    if (ytPlayer) ytPlayer.setVolume(_musicVolBeforeMute);
+    if (slider) slider.value = _musicVolBeforeMute;
+    if (btn) btn.textContent = '🔊';
+  } else {
+    // mute
+    _musicMuted = true;
+    _musicVolBeforeMute = ytPlayer ? ytPlayer.getVolume() : (slider ? parseInt(slider.value) : 30);
+    if (ytPlayer) ytPlayer.setVolume(0);
+    if (slider) slider.value = 0;
+    if (btn) btn.textContent = '🔇';
+  }
 }
 
 function stopMusic() {
