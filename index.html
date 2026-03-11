@@ -157,10 +157,7 @@
       bottom: auto; left: auto;
       transform: none;
     }
-    /* stage 轉了 90° CW，所以按鈕文字要轉 -90° 補正才是正的 */
-    body.page-rotated .corner-btn {
-      transform: rotate(-90deg);
-    }
+
     #corner-btns.hidden { opacity: 0; pointer-events: none; }
     .corner-btn {
       width: 42px; height: 42px; border-radius: 10px;
@@ -303,11 +300,7 @@
     #zone-b:hover .fit-toggle,
     .fit-toggle.always-show { opacity: 1; }
     /* ── 橫屏時 fit-toggle ── */
-    /* 橫屏時 fit-toggle：位置不動，只旋轉文字 90° */
-    body.page-rotated .fit-toggle {
-      transform: rotate(90deg);
-      transform-origin: left bottom;
-    }
+    /* 橫屏模式 fit-toggle 位置不變 */
     .ft-btn {
       font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
       padding: 4px 8px; border-radius: 5px; cursor: pointer;
@@ -375,42 +368,33 @@
 
 
     /* ── ROTATION ── */
-    /* ── 整個畫面旋轉（直屏↔橫屏）── */
-    body.page-rotated { overflow: hidden; }
-
-    /* Stage 和 HUD 整體旋轉 90° */
-    body.page-rotated #stage,
-    body.page-rotated #hud {
-      transform: rotate(90deg);
-      width: 100vh;
-      height: 100vw;
-      position: fixed;
-      top:  calc(50vh - 50vw);
-      left: calc(50vw - 50vh);
+    /* ── 橫屏模式：stage 改成左右排列，不用旋轉 ── */
+    body.page-rotated #stage {
+      flex-direction: row !important;
     }
-
-    /* 旋轉後 stage 是左右分割，zone 內圖片/canvas 要反轉 -90° 讓內容變正 */
-    body.page-rotated .zone-slide > img,
-    body.page-rotated .zone-slide > canvas {
-      transform: rotate(-90deg) !important;
-      transform-origin: center center !important;
-      /* Each zone takes half the screen width after rotation */
-      width: 100vh !important;
-      height: 50vw !important;
-      max-width: none !important; max-height: none !important;
-      position: absolute !important;
-      top: 50% !important; left: 50% !important;
-      margin-top: -25vw !important; margin-left: -50vh !important;
-      object-fit: contain;
+    /* zone-a 在橫屏時寬度 = LAYOUT_RATIO%，高度 = 100% */
+    body.page-rotated #zone-a {
+      height: 100% !important;
+      width: var(--ratio-a, 50%) !important;
+      flex-shrink: 0;
     }
-
-    /* 音樂膠囊在旋轉後固定在畫面底部中間 */
-    body.page-rotated #music-bar {
-      transform: rotate(90deg) translateX(-50%);
-      transform-origin: bottom left;
-      bottom: auto;
-      left: calc(50vh - 50vw);
-      top: calc(100vw - 56px);
+    body.page-rotated #zone-b {
+      height: 100% !important;
+      flex: 1 !important;
+    }
+    /* 分隔線變垂直 */
+    body.page-rotated #zone-divider {
+      width: 10px !important;
+      height: 100% !important;
+      cursor: col-resize !important;
+    }
+    body.page-rotated #zone-divider::after {
+      width: 3px !important;
+      height: 100% !important;
+    }
+    /* 右上角按鈕文字轉正 */
+    body.page-rotated .corner-btn {
+      transform: none !important;
     }
 
     /* ── Zone 內容旋轉（每格獨立）── */
@@ -829,16 +813,22 @@ function setupDividerDrag() {
     const rotated = document.body.classList.contains('page-rotated');
     let pct;
     if (rotated) {
-      // Stage rotated 90° CW: zone-a (CSS top) becomes visual LEFT
-      // Dragging right (bigger clientX) = divider moves right visually
-      // = zone-b (right) gets bigger = zone-a pct DECREASES → invert
-      pct = 100 - ((clientX - rect.left) / rect.width) * 100;
+      // horizontal split: drag left-right
+      pct = ((clientX - rect.left) / rect.width) * 100;
     } else {
       pct = ((clientY - rect.top) / rect.height) * 100;
     }
     pct = Math.min(Math.max(pct, 15), 85);
     CONFIG.LAYOUT_RATIO = Math.round(pct);
-    zoneA.style.height = pct + '%';
+    const rotated2 = document.body.classList.contains('page-rotated');
+    if (rotated2) {
+      zoneA.style.width  = pct + '%';
+      zoneA.style.height = '';
+      document.documentElement.style.setProperty('--ratio-a', pct + '%');
+    } else {
+      zoneA.style.height = pct + '%';
+      zoneA.style.width  = '';
+    }
     updateRatioDisplay(CONFIG.LAYOUT_RATIO);
     const ri = document.getElementById('inp-ratio');
     if (ri) ri.value = CONFIG.LAYOUT_RATIO;
@@ -1254,10 +1244,11 @@ function togglePageRotate() {
     btn.style.background = isRotated ? 'rgba(224,92,26,0.6)' : '';
     btn.textContent = isRotated ? '直' : '橫';
   }
+  // sync zone-a width <-> height for the new axis
+  applyStageLayout();
   CONFIG.PAGE_ROTATED = isRotated;
   try { localStorage.setItem('sjps_cfg', JSON.stringify(CONFIG)); } catch(e) {}
-  showToast(isRotated ? '↻ 畫面旋轉 90°' : '↺ 還原直屏');
-  setTimeout(repositionFitToggles, 50);
+  showToast(isRotated ? '⬛ 橫屏模式' : '⬜ 直屏模式');
 }
 
 // zoneRotation: 每個 zone 目前旋轉角度 (0/90/180/270)
