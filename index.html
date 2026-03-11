@@ -298,16 +298,19 @@
     #zone-a:hover .fit-toggle,
     #zone-b:hover .fit-toggle,
     .fit-toggle.always-show { opacity: 1; }
-    /* ── 橫屏時 fit-toggle：反轉文字、移到視覺底部 ── */
+    /* ── 橫屏時 fit-toggle ── */
+    /* Stage 順時針轉90°後，zone內座標軸也跟著轉：
+       CSS right  → 視覺上的 bottom
+       CSS bottom → 視覺上的 left
+       所以 right:10px + bottom:10px = 視覺左下角 */
     body.page-rotated .fit-toggle {
-      /* 位置：視覺上各 zone 的左下角 = 旋轉後的 bottom, left */
-      bottom: 12px;
-      left: 50%;
-      top: auto; right: auto;
-      transform: translateX(-50%) rotate(-90deg);
-      transform-origin: center center;
-      /* 橫排變直排，文字轉正 */
-      flex-direction: column;
+      bottom: 10px;
+      right: 10px;
+      left: auto;
+      top: auto;
+      transform: rotate(90deg);
+      transform-origin: bottom right;
+      flex-direction: row;
       gap: 4px;
     }
     .ft-btn {
@@ -319,10 +322,7 @@
       transition: background 0.2s, color 0.2s;
       white-space: nowrap;
     }
-    /* 橫屏時按鈕文字再轉回正 */
-    body.page-rotated .ft-btn {
-      transform: rotate(90deg);
-    }
+    /* 橫屏時按鈕文字由容器旋轉統一處理 */
     .ft-btn:hover { background: rgba(40,40,40,0.92); color:#fff; }
     .ft-btn.active { background: var(--accent); color: #fff; }
     #zone-b .ft-btn.active { background: #3a9ad9; }
