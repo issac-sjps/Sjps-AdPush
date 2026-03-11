@@ -338,6 +338,18 @@
       width: 1px; height: 1px; pointer-events: none;
     }
 
+
+    /* File selection checkbox */
+    .dl-check { width:18px; height:18px; accent-color:var(--accent); cursor:pointer; flex-shrink:0; }
+    .dl-item-col.unselected { opacity: 0.45; }
+    .dl-item-col.unselected .dl-row1 .dl-name { text-decoration: line-through; color: var(--sub); }
+    .sel-hint { font-size:12px; color:var(--sub); margin-bottom:10px; font-family:var(--mono); }
+    .sel-actions { display:flex; gap:8px; margin-bottom:10px; }
+    .sel-btn { font-size:12px; padding:4px 12px; border-radius:20px; border:1.5px solid var(--border);
+      background:var(--surface); color:var(--sub); cursor:pointer; font-family:var(--mono);
+      transition: all 0.2s; }
+    .sel-btn:hover { border-color:var(--accent); color:var(--accent); }
+
     /* Toast */
     #toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--text); color:#fff; padding:12px 26px; border-radius:var(--r); font-size:14px; z-index:9999; transition:transform 0.3s; pointer-events:none; white-space:nowrap; }
     #toast.show { transform:translateX(-50%) translateY(0); }
@@ -583,6 +595,9 @@ let slideTimer = null, progressRaf = null, progressStart = null;
 let slideTimerB = null, progressRafB = null, progressStartB = null;
 let adminOpen = false, tokenClient = null, accessToken = null, gapiReady = false;
 let fileDurations = {};
+// selectedFiles: { 'a': Set of fileIds, 'b': Set of fileIds }
+// null = not yet initialized (will default to first file only)
+let selectedFiles = { a: null, b: null };
 let uploadZone = 'a'; // which zone to upload to
 
 function setUploadZone(zone) {
@@ -598,6 +613,7 @@ function setUploadZone(zone) {
 // ── BOOT ──────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
   loadConfig();
+  loadSelectedFiles();
   applyStageLayout();
   loadFitModes();
   setupKeyboard(); setupDropZone();
@@ -927,10 +943,13 @@ async function buildSlideEls(zone='a') {
   zoneEl.querySelectorAll('.zone-slide').forEach(e => e.remove());
 
   const srcFiles = zone === 'a' ? allFiles : allFilesB;
+  const sel = selectedFiles[zone];
   const mediaFiles = srcFiles.filter(f => {
     const m = f.mimeType || '';
-    return m.startsWith('image/') || m === 'application/pdf' ||
+    const isMedia = m.startsWith('image/') || m === 'application/pdf' ||
            m.includes('presentationml') || m.includes('powerpoint') || m.startsWith('video/');
+    // only include if selected (or no selection set yet)
+    return isMedia && (!sel || sel.size === 0 || sel.has(f.id));
   });
 
   const slideList = zone === 'a' ? slides : slidesB;
@@ -1473,40 +1492,122 @@ function renderDriveList(el, files, zone) {
     return '📁';
   };
   el.innerHTML = '';
+
+  // Filter to media only
+  const mediaFiles = files.filter(f => {
+    const m = f.mimeType || '';
+    return m.startsWith('image/') || m === 'application/pdf' ||
+           m.includes('presentationml') || m.includes('powerpoint') || m.startsWith('video/');
+  });
+
+  // Init selection: default only first file
+  if (!selectedFiles[zone] && mediaFiles.length) {
+    selectedFiles[zone] = new Set([mediaFiles[0].id]);
+    saveSelectedFiles();
+  }
+
+  // Select all / none buttons
+  const actRow = document.createElement('div'); actRow.className = 'sel-actions';
+  actRow.innerHTML =
+    '<button class="sel-btn" onclick="selAll(\'' + zone + '\')">全選</button>' +
+    '<button class="sel-btn" onclick="selNone(\'' + zone + '\')">全不選</button>' +
+    '<span class="sel-hint">✓ 勾選的才輪播</span>';
+  el.appendChild(actRow);
+
   const defDur = zone === 'b' ? (CONFIG.SLIDE_DURATION_B||4) : (CONFIG.SLIDE_DURATION||4);
-  files.forEach(f => {
+  mediaFiles.forEach(f => {
     const isPdf = (f.mimeType || '').includes('pdf');
     const curDur = fileDurations[f.id] !== undefined ? fileDurations[f.id] : '';
     const curPages = filePages[f.id] !== undefined ? filePages[f.id] : '';
-    const div = document.createElement('div'); div.className = 'dl-item dl-item-col';
-    div.innerHTML = `
-      <div class="dl-row1">
-        <span class="dl-icon">${icon(f.mimeType || '')}</span>
-        <span class="dl-name">${f.name}</span>
-        ${accessToken
-          ? `<button class="btn-delete" onclick="deleteFile('${f.id}','${f.name.replace(/'/g,"\\'")}')">🗑</button>`
-          : '<span class="dl-login-hint">登入可刪</span>'
-        }
-      </div>
-      <div class="dl-row2">
-        ${isPdf ? `
-        <label class="dl-ctrl-label">PDF 總頁數
-          <input class="dl-dur-inp" type="number" min="1" max="999"
-            value="${curPages}" placeholder="？"
-            title="PDF 有幾頁？填入後每頁會獨立播放"
-            onchange="setPdfPages('${f.id}', this.value)" data-pages-id="${f.id}">
-        </label>` : ''}
-        <label class="dl-ctrl-label">${isPdf ? '每頁秒數' : '播放秒數'}
-          <input class="dl-dur-inp" type="number" min="1" max="999"
-            value="${curDur}" placeholder="${defDur}"
-            title="播放秒數（空白=使用預設）"
-            onchange="setFileDur('${f.id}', this.value)">
-        </label>
-        ${isPdf && curPages ? `<span class="pdf-page-badge">共 ${curPages} 頁</span>` : ''}
-      </div>`;
+    const isChecked = selectedFiles[zone] ? selectedFiles[zone].has(f.id) : false;
+    const div = document.createElement('div');
+    div.className = 'dl-item dl-item-col' + (isChecked ? '' : ' unselected');
+    div.id = 'dlitem-' + f.id;
+
+    const row1 = document.createElement('div'); row1.className = 'dl-row1';
+    const chk = document.createElement('input');
+    chk.type = 'checkbox'; chk.className = 'dl-check'; chk.checked = isChecked;
+    chk.onchange = function() { toggleFileSelect(zone, f.id, this.checked); };
+    row1.appendChild(chk);
+    row1.insertAdjacentHTML('beforeend',
+      '<span class="dl-icon">' + icon(f.mimeType||'') + '</span>' +
+      '<span class="dl-name">' + f.name + '</span>' +
+      (accessToken
+        ? '<button class="btn-delete" onclick="deleteFile(\'' + f.id + '\',\'' + f.name.replace(/'/g,"\\'") + '\')">🗑</button>'
+        : '<span class="dl-login-hint">登入可刪</span>')
+    );
+    div.appendChild(row1);
+
+    const row2 = document.createElement('div'); row2.className = 'dl-row2';
+    if (isPdf) {
+      row2.insertAdjacentHTML('beforeend',
+        '<label class="dl-ctrl-label">PDF 總頁數' +
+        '<input class="dl-dur-inp" type="number" min="1" max="999" value="' + curPages + '" placeholder="？"' +
+        ' onchange="setPdfPages(\'' + f.id + '\', this.value)" data-pages-id="' + f.id + '"></label>');
+    }
+    row2.insertAdjacentHTML('beforeend',
+      '<label class="dl-ctrl-label">' + (isPdf ? '每頁秒數' : '播放秒數') +
+      '<input class="dl-dur-inp" type="number" min="1" max="999" value="' + curDur + '" placeholder="' + defDur + '"' +
+      ' onchange="setFileDur(\'' + f.id + '\', this.value)"></label>' +
+      (isPdf && curPages ? '<span class="pdf-page-badge">共 ' + curPages + ' 頁</span>' : '')
+    );
+    div.appendChild(row2);
     el.appendChild(div);
   });
 }
+
+function toggleFileSelect(zone, fileId, checked) {
+  if (!selectedFiles[zone]) selectedFiles[zone] = new Set();
+  if (checked) selectedFiles[zone].add(fileId);
+  else selectedFiles[zone].delete(fileId);
+  const item = document.getElementById('dlitem-' + fileId);
+  if (item) item.classList.toggle('unselected', !checked);
+  saveSelectedFiles();
+  rebuildZone(zone);
+}
+
+function selAll(zone) {
+  const files = zone === 'a' ? allFiles : allFilesB;
+  selectedFiles[zone] = new Set(files.map(f => f.id));
+  saveSelectedFiles();
+  if (zone === 'a') updateDriveList(allFiles); else updateDriveListB(allFilesB);
+  rebuildZone(zone);
+}
+
+function selNone(zone) {
+  selectedFiles[zone] = new Set();
+  saveSelectedFiles();
+  if (zone === 'a') updateDriveList(allFiles); else updateDriveListB(allFilesB);
+  rebuildZone(zone);
+}
+
+function saveSelectedFiles() {
+  try {
+    localStorage.setItem('sjps_sel', JSON.stringify({
+      a: selectedFiles.a ? [...selectedFiles.a] : null,
+      b: selectedFiles.b ? [...selectedFiles.b] : null,
+    }));
+  } catch(e) {}
+}
+
+function loadSelectedFiles() {
+  try {
+    const s = localStorage.getItem('sjps_sel');
+    if (s) {
+      const d = JSON.parse(s);
+      if (d.a) selectedFiles.a = new Set(d.a);
+      if (d.b) selectedFiles.b = new Set(d.b);
+    }
+  } catch(e) {}
+}
+
+async function rebuildZone(zone) {
+  if (zone === 'a') clearTimeout(slideTimer); else clearTimeout(slideTimerB);
+  await buildSlideEls(zone);
+  if (zone === 'a') { if (slides.length) goTo(0); }
+  else              { if (slidesB.length) goToB(0); }
+}
+
 
 function setFileDur(fileId, val) {
   const n = parseInt(val);
