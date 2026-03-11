@@ -151,11 +151,15 @@
       transition: opacity 0.6s ease;
       z-index: 400;
     }
-    /* 旋轉後 corner-btns 固定在視覺右上角（stage右上 = 畫面右上） */
+    /* 旋轉後 corner-btns 固定在右上角，文字各自轉正 */
     body.page-rotated #corner-btns {
       top: 16px; right: 16px;
       bottom: auto; left: auto;
       transform: none;
+    }
+    /* stage 轉了 90° CW，所以按鈕文字要轉 -90° 補正才是正的 */
+    body.page-rotated .corner-btn {
+      transform: rotate(-90deg);
     }
     #corner-btns.hidden { opacity: 0; pointer-events: none; }
     .corner-btn {
