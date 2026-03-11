@@ -303,16 +303,10 @@
     #zone-b:hover .fit-toggle,
     .fit-toggle.always-show { opacity: 1; }
     /* ── 橫屏時 fit-toggle ── */
-    /* 橫屏時 fit-toggle 被 JS 移出 stage，直接 fixed 定位 */
-    .fit-toggle.landscape-mode {
-      position: fixed !important;
-      transform: rotate(90deg) !important;
-      transform-origin: left bottom !important;
-      flex-direction: row !important;
-      gap: 4px !important;
-      z-index: 500 !important;
-      opacity: 1 !important;
-      pointer-events: all !important;
+    /* 橫屏時 fit-toggle：位置不動，只旋轉文字 90° */
+    body.page-rotated .fit-toggle {
+      transform: rotate(90deg);
+      transform-origin: left bottom;
     }
     .ft-btn {
       font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
@@ -1250,39 +1244,7 @@ function loadFitModes() {
 
 // ── 整個畫面旋轉 ──
 function repositionFitToggles() {
-  const rotated = document.body.classList.contains('page-rotated');
-  ['a','b'].forEach(zone => {
-    const ft = document.getElementById('fit-' + zone);
-    const zoneEl = document.getElementById('zone-' + zone);
-    if (!ft || !zoneEl) return;
-
-    if (rotated) {
-      // Move ft OUT of the rotated stage → body, so fixed positioning works correctly
-      if (ft.parentElement !== document.body) {
-        ft._origParent = ft.parentElement;
-        document.body.appendChild(ft);
-      }
-      ft.classList.add('landscape-mode');
-
-      // getBoundingClientRect now gives true visual position of each zone
-      const r = zoneEl.getBoundingClientRect();
-      // Visual bottom-left of zone: x=r.left+12, y=r.bottom-12
-      // But ft is rotated(90deg) with transform-origin:left bottom
-      // So we anchor left+bottom of ft to visual bottom-left of zone
-      ft.style.left   = (r.left + 12) + 'px';
-      ft.style.bottom = (window.innerHeight - r.bottom + 12) + 'px';
-      ft.style.top    = 'auto';
-      ft.style.right  = 'auto';
-    } else {
-      // Move ft back into its original parent zone
-      if (ft._origParent && ft.parentElement !== ft._origParent) {
-        ft._origParent.appendChild(ft);
-      }
-      ft.classList.remove('landscape-mode');
-      ft.style.left = ''; ft.style.bottom = '';
-      ft.style.top  = ''; ft.style.right  = '';
-    }
-  });
+  // 位置固定不動，CSS rotate 處理文字方向
 }
 
 function togglePageRotate() {
