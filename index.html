@@ -299,19 +299,19 @@
     #zone-b:hover .fit-toggle,
     .fit-toggle.always-show { opacity: 1; }
     /* ── 橫屏時 fit-toggle ── */
-    /* Stage 順時針轉90°後，zone內座標軸也跟著轉：
-       CSS right  → 視覺上的 bottom
-       CSS bottom → 視覺上的 left
-       所以 right:10px + bottom:10px = 視覺左下角 */
+    /* Stage 順時針90°: right→視覺bottom, bottom→視覺left
+       用 top:auto bottom:50% right:8px 讓它固定在視覺中下方
+       旋轉後整組按鈕維持在 zone 內 */
     body.page-rotated .fit-toggle {
-      bottom: 10px;
-      right: 10px;
-      left: auto;
       top: auto;
+      left: auto;
+      bottom: 8px;
+      right: 8px;
       transform: rotate(90deg);
-      transform-origin: bottom right;
+      transform-origin: right bottom;
       flex-direction: row;
       gap: 4px;
+      max-width: none;
     }
     .ft-btn {
       font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
